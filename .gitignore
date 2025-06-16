@@ -58,4 +58,5 @@ rsconnect/
 # raw data
 data/*
 
-
+# output folders because they're huge
+output/*
