@@ -4,11 +4,13 @@ library(ggpubr)
 library(tidyverse)
 library(brms)
 
-experiment = 3
+experiment <- 3
+
+exclude_conditions <- c("dependent_source", "independent") # contrasts should be independent vs. dependent & dependent vs. dependent_source
 
 # define log model
 power <- bf(
-  # I need to make surethat the parameters can never be < 0. Conventionally, 
+  # I need to make sure that the parameters can never be < 0. Conventionally, 
   # you would do this by setting a lower bound in the priors, but this will also 
   # restrict the difference between independent and dependent to be >0 for all 
   # parameters, which I do not want, so that I can identify cases where there are no real differences. 
@@ -16,8 +18,8 @@ power <- bf(
   # My solution is to exponentiation each parameter, meaning that they are functionally constrained to be positive. 
   confidence ~ (exp(start) + exp(increase)) - exp(increase) * (n_sources^(-exp(rate))),
   start ~ 1 + consensus + prior_belief,
-  increase ~ 1 + consensus, # + prior_belief,
-  rate ~ 1 + consensus, #+ prior_belief,
+  increase ~ 1 + consensus + prior_belief,
+  rate ~ 1 + consensus + prior_belief,
   nl = TRUE
   
 )
@@ -59,16 +61,22 @@ generate_power_priors <- function(data, baseline = "dependent") {
 
 
 
-
 data <- read.csv(here(paste0("data/experiment-",experiment,"/clean/e",experiment,"-long.csv")))
+
+# loop through comparison conditions. 
+
+for (i in 1:length(exclude_conditions)){
+  
+exclude_cond <- exclude_conditions[i]
 
 # do some cleaning
 d_modelling <- data %>%
   mutate(
     prior_belief = scale(views),
     participant = id,
-    consensus = relevel(factor(consensus), ref = "dependent"),
-  )
+    consensus = relevel(factor(consensus), ref = "independent"),
+  ) %>%
+  filter(consensus  != exclude_cond)
 
 if (experiment %in% 1:2){ # already done in E3
   d_modelling <- d_modelling %>%
@@ -83,23 +91,6 @@ if (experiment %in% 1:2){ # already done in E3
 
 
 power_priors <- generate_power_priors(d_modelling)
-
-# power_priors <- c(
-#   # Increase
-#   prior(normal(log(25), 0.5), nlpar = "increase", coef = "Intercept"),
-#   prior(normal(0, 0.5), nlpar = "increase", coef = "consensusdependent"),
-#   prior(normal(0, 0.5), nlpar = "increase", coef = "consensusdependent_source"),
-#   
-#   # Start
-#   prior(normal(log(75), 0.5), nlpar = "start", coef = "Intercept"),
-#   prior(normal(0, 0.5), nlpar = "start", coef = "consensusdependent"),
-#   prior(normal(0, 0.5), nlpar = "start", coef = "consensusdependent_source"),
-#   
-#   # Rate
-#   prior(normal(log(0.5), 0.2), nlpar = "rate", coef = "Intercept"),
-#   prior(normal(0, 0.2), nlpar = "rate", coef = "consensusdependent"),
-#   prior(normal(0, 0.2), nlpar = "rate", coef = "consensusdependent_source")
-# )
 
 fitHierModel = function(data, form, prior, experiment, form_name){
   
@@ -119,6 +110,6 @@ fitHierModel = function(data, form, prior, experiment, form_name){
 }
 
 fit <- fitHierModel(d_modelling, power, power_priors, experiment, "Power")
-save(fit, file = here(paste0("output/hier-brms-exp",experiment,"-power-fit.Rdata")))
+save(fit, file = here(paste0("output/hier-brms-exp",experiment,"-power-fit-excluding-",exclude_cond,".Rdata")))
 
-
+}

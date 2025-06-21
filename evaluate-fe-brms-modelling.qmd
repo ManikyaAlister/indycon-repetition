@@ -17,7 +17,7 @@ library(here)
 library(ggdist)
 
 # define experiments
-experiments = c(1,2,3)
+experiments = c(3)
 
 # load model fits
 fits = list()
@@ -50,7 +50,7 @@ mean_prior_belief <- mean(d_modelling$prior_belief, na.rm = TRUE)
 
 new_data <- expand.grid(
   n_sources = seq(1, 10, length.out = 50),
-  consensus = c("dependent", "independent"),
+  consensus = c("dependent", "independent", "dependent_source"),
   prior_belief = mean_prior_belief
 ) %>%
   as_tibble()
@@ -148,6 +148,10 @@ Now that we know the model fits well, and we can see that an independent consens
 The table below shows the absolute means an 95% credible differences between parameters, as well as the *relative* means and 95% credible differences between parameters across independence conditions. The relative differences were calculated because the parameters are on different scales (small differences in rate result in big differences in shape of the curve), so this allows us to see by what % is the parameter in the independent condition than the equivalent in the dependent condition.
 
 ```{r}
+
+```
+
+```{r}
 param_contrasts_summary <- NULL
 param_contrasts_long <- NULL
 for (exp in experiments){
@@ -157,24 +161,45 @@ fit <- fits[[exp]]
 draws <- as_draws_df(fit)
 
 # 2. Helper to extract and transform parameters
-get_param_contrasts <- function(draws, param_name) {
-  intercept <- draws[[paste0("b_", param_name, "_Intercept")]]
-  condition_effect <- draws[[paste0("b_", param_name, "_consensusindependent")]]
+get_param_contrasts <- function(draws, param_name, contrast1, contrast2, fit) {
   
-  dep <- exp(intercept)
-  indep <- exp(intercept + condition_effect)
+  # figure out whether a parameter is an intercept or condition effect. 
+  get_condition_effect = function(param_name, contrast, draws){
+    
+    intercept_name <- paste0("b_", param_name, "_Intercept")
+    cond_effect_name <- paste0("b_", param_name, "_",contrast)
+    
+    if (grepl("Intercept", cond_effect_name)){
+      fe <- draws[[cond_effect_name]]
+    } else { # if condition effect, add it onto the intercept. 
+      fe <- draws[[intercept_name]] + draws[[cond_effect_name]]
+    }
+    fe
+  }
   
+  fe1 <- exp(get_condition_effect(param_name, contrast1, draws))
+  fe2 <- exp(get_condition_effect(param_name, contrast2, draws))
+
   tibble(
     parameter = param_name,
-    dep = dep,
-    indep = indep,
-    abs_diff = indep - dep,
-    rel_diff = (indep - dep) / dep
+    contrast_name1 = contrast1,
+    contrast_name2 = contrast2,
+    contrast1 = fe1,
+    contrast2 = fe2,
+    abs_diff = fe2 - fe1,
+    rel_diff = (fe2 - fe1) / fe1
   )
 }
 
+get_param_contrasts(draws, "start","consensusdependent", "Intercept")
+
 # 3. Individual parameter contrasts
 log_params <- c("rate", "increase", "start")
+contrasts <- list(
+  c("consensusdependent", "Intercept"),
+  c("consensusdependent", "consensusdependent_source")
+)
+
 param_contrasts <- bind_rows(lapply(log_params, function(p) get_param_contrasts(draws, p)))
 
 # 4. Derived "true" asymptote = start + increase
