@@ -22,7 +22,7 @@ experiments = c(3)
 # load model fits
 fits = list()
 for (exp in experiments){
-load(here(paste0("output/hier-brms-exp",exp,"-power-fit.Rdata")))
+load(here(paste0("output/fe-brms-exp",exp,"-power-fit-full.Rdata")))
 fits[[exp]] <- fit
 }
 ```
@@ -45,15 +45,33 @@ for (exp in experiments) {
   
   fit <- fits[[exp]]
   
-  # Make a prediction grid that spans all values of n_sources for both consensus types
-mean_prior_belief <- mean(d_modelling$prior_belief, na.rm = TRUE)
 
-new_data <- expand.grid(
+  # load and combine empirical data 
+  load(here("data/experiment-3/clean/d-modelling.Rdata"))  
+  
+  # summarise empirical data for plotting
+  d_summ_exp <- d_modelling %>%
+    mutate(additional_sources = n_sources - 1) %>%
+    group_by(consensus, additional_sources) %>%
+    summarise(mean = mean(confidence),
+              sd = sd(confidence),
+              n = n()) %>%
+    mutate(se = sd / sqrt(n),
+           experiment = exp)
+  
+  d_empirical_summ <- bind_rows(d_empirical_summ, d_summ_exp)
+  
+  # Make a prediction grid that spans all values of n_sources for both consensus types
+  mean_prior_belief <- mean(d_modelling$prior_belief, na.rm = TRUE)
+
+  new_data <- expand.grid(
   n_sources = seq(1, 10, length.out = 50),
   consensus = c("dependent", "independent", "dependent_source"),
   prior_belief = mean_prior_belief
 ) %>%
   as_tibble()
+
+new_data$consensus <- relevel(new_data$consensus, ref = "independent")
 
 
 # Predict using fixed effects only (no partial pooling)
@@ -68,47 +86,10 @@ new_data <- expand.grid(
   d_predictions <- bind_rows(d_predictions, d_predictions_exp)
 
   
-  # load and combine empirical data 
-  
-  d_exp <- read.csv(here(
-    paste0(
-      "data/experiment-",
-      exp,
-      "/clean/e",
-      exp,
-      "-long.csv"
-    ))) %>%
-          mutate(prior_belief = scale(views),
-    participant = id
-  )
-  
-  
-if (exp %in% c(1,2)){
-  d_exp <- d_exp %>%
-    mutate(
-      n_sources = case_when(
-        repetitions == "Baseline" ~ 1,
-        repetitions == "Phase 1" ~ 4,
-        repetitions == "Phase 2" ~ 7,
-        repetitions == "Phase 3" ~ 10
-      ))
 }
-  
-  # summarise empirical data for plotting
-  d_summ_exp <- d_exp %>%
-    mutate(additional_sources = n_sources - 1) %>%
-    group_by(consensus, additional_sources) %>%
-    summarise(mean = mean(confidence),
-              sd = sd(confidence),
-              n = n()) %>%
-    mutate(se = sd / sqrt(n),
-           experiment = exp)
-  
-  d_empirical_summ <- bind_rows(d_empirical_summ, d_summ_exp)
-}
-
 
 ```
+
 
 ```{r}
 plot <- d_predictions %>%
@@ -135,8 +116,6 @@ plot <- d_predictions %>%
 plot
 
 ggsave(plot = plot, filename = here(paste0("plots/fe-brms-power-fit.jpg")), width = 7, height = 4)
-
-
 ```
 
 Seems like it does pretty well! I've also had a look at some other similar functions, like log or exponential functions, and found that log & power fit similarly better than exponential, but I chose power because I find the parameters more interperetable.
@@ -148,127 +127,141 @@ Now that we know the model fits well, and we can see that an independent consens
 The table below shows the absolute means an 95% credible differences between parameters, as well as the *relative* means and 95% credible differences between parameters across independence conditions. The relative differences were calculated because the parameters are on different scales (small differences in rate result in big differences in shape of the curve), so this allows us to see by what % is the parameter in the independent condition than the equivalent in the dependent condition.
 
 ```{r}
-
-```
-
-```{r}
 param_contrasts_summary <- NULL
 param_contrasts_long <- NULL
-for (exp in experiments){
-  
-fit <- fits[[exp]]
-  # Extract draws
-draws <- as_draws_df(fit)
+intercept_level <- c("Dependent" = "consensusdependent")
+comparison_levels <- c("Independent" = "consensusindependent", "Dependent Source" = "consensusdependent_source")
 
-# 2. Helper to extract and transform parameters
-get_param_contrasts <- function(draws, param_name, contrast1, contrast2, fit) {
+
+for (exp in experiments) {
+  fit <- fits[[exp]]
   
-  # figure out whether a parameter is an intercept or condition effect. 
-  get_condition_effect = function(param_name, contrast, draws){
-    
-    intercept_name <- paste0("b_", param_name, "_Intercept")
-    cond_effect_name <- paste0("b_", param_name, "_",contrast)
-    
-    if (grepl("Intercept", cond_effect_name)){
-      fe <- draws[[cond_effect_name]]
-    } else { # if condition effect, add it onto the intercept. 
-      fe <- draws[[intercept_name]] + draws[[cond_effect_name]]
+  print("Model fit: ")  
+  #print(summary(fit)$fixed %>% select(-Bulk_ESS,-Tail_ESS))
+  
+  # Extract draws
+  draws <- as_draws_df(fit)
+  
+  # 2. Helper to extract and transform parameters
+  get_param_contrasts <- function(draws,
+                                  param_name,
+                                  condition_effect_name) {
+    # asymptote is start + increase
+    if (param_name == "asymptote") {
+      start_intercept <- draws[["b_start_Intercept"]]
+      increase_intercept <- draws[["b_increase_Intercept"]]
+      
+      intercept <- exp(start_intercept) + exp(increase_intercept)
+      condition_effect <- exp(start_intercept + draws[[paste0("b_start_", condition_effect_name)]]) + exp(increase_intercept + draws[[paste0("b_increase_", condition_effect_name)]]) #+ intercept
+      
+    } else{
+      intercept_raw <- draws[[paste0("b_", param_name, "_Intercept")]]
+      intercept <- exp(intercept_raw)
+      condition_effect <- exp(intercept_raw + draws[[paste0("b_", param_name, "_", condition_effect_name)]])
     }
-    fe
+    
+    tibble(
+      parameter = param_name,
+      condition_effect_name = condition_effect_name,
+      condition_effect = condition_effect,
+      intercept = intercept,
+      abs_diff = intercept - condition_effect,
+      rel_diff = (intercept - condition_effect) / condition_effect
+    )
   }
   
-  fe1 <- exp(get_condition_effect(param_name, contrast1, draws))
-  fe2 <- exp(get_condition_effect(param_name, contrast2, draws))
-
-  tibble(
-    parameter = param_name,
-    contrast_name1 = contrast1,
-    contrast_name2 = contrast2,
-    contrast1 = fe1,
-    contrast2 = fe2,
-    abs_diff = fe2 - fe1,
-    rel_diff = (fe2 - fe1) / fe1
-  )
-}
-
-get_param_contrasts(draws, "start","consensusdependent", "Intercept")
-
-# 3. Individual parameter contrasts
-log_params <- c("rate", "increase", "start")
-contrasts <- list(
-  c("consensusdependent", "Intercept"),
-  c("consensusdependent", "consensusdependent_source")
-)
-
-param_contrasts <- bind_rows(lapply(log_params, function(p) get_param_contrasts(draws, p)))
-
-# 4. Derived "true" asymptote = start + increase
-asymptote_dep <- exp(draws$b_start_Intercept) + exp(draws$b_increase_Intercept)
-asymptote_indep <- exp(draws$b_start_Intercept + draws$b_start_consensusindependent) +
-  exp(draws$b_increase_Intercept + draws$b_increase_consensusindependent)
-
-param_contrasts <- bind_rows(
-  param_contrasts,
-  tibble(
-    parameter = "asymptote",
-    dep = asymptote_dep,
-    indep = asymptote_indep,
-    abs_diff = asymptote_indep - asymptote_dep,
-    rel_diff = (asymptote_indep - asymptote_dep) / asymptote_dep
-  )
-)
-
-# 5. Summarise posterior contrasts
-param_contrasts_summary_exp <- param_contrasts %>%
-  group_by(parameter) %>%
-  summarise(
-    mean_dep = mean(dep),
-    mean_indep = mean(indep),
-    mean_abs_diff = mean(abs_diff),
-    ci_abs_lower = quantile(abs_diff, 0.025),
-    ci_abs_upper = quantile(abs_diff, 0.975),
-    prob_indep_gt_dep = mean(abs_diff > 0),
+  # Individual parameter contrasts
+  log_params <- c("rate", "asymptote", "start")
+  
+  for (i in 1:length(comparison_levels)) {
+    comparison_level <- comparison_levels[i]
+    param_contrasts <- bind_rows(lapply(log_params, function(p)
+      get_param_contrasts(draws, p, comparison_level)))
     
-    mean_rel_diff = mean(rel_diff),
-    ci_rel_lower = quantile(rel_diff, 0.025),
-    ci_rel_upper = quantile(rel_diff, 0.975)
-  ) %>%
-  arrange(match(parameter, c("rate", "increase", "start", "asymptote")))
+    # 5. Summarise posterior contrasts
+    param_contrast_summ_exp <- param_contrasts %>%
+      group_by(parameter) %>%
+      summarise(
+        mean_cond_effect = mean(condition_effect),
+        mean_intercept = mean(intercept),
+        mean_abs_diff = mean(abs_diff),
+        ci_abs_lower = quantile(abs_diff, 0.025),
+        ci_abs_upper = quantile(abs_diff, 0.975),
+        prob_intercept_gt_contrast = mean(abs_diff > 0),
+        prob_intercept_lt_contrast = mean(abs_diff < 0),
+        prob_intercept_diff_contrast = prob_intercept_gt_contrast - prob_intercept_lt_contrast,
+        
+        
+        mean_rel_diff = mean(rel_diff),
+        ci_rel_lower = quantile(rel_diff, 0.025),
+        ci_rel_upper = quantile(rel_diff, 0.975)
+      ) %>%
+      arrange(match(parameter, c(
+        "rate", "increase", "start", "asymptote"
+      )))
+    
+    print(paste0(names(intercept_level), " vs. ", names(comparison_level)))
+    #param_contrast_summ_exp <- param_contrasts_summary[[1]]
+    
+    print(knitr::kable(
+      param_contrast_summ_exp %>% select(
+        parameter,
+        mean_cond_effect,
+        mean_intercept,
+        mean_abs_diff,
+        ci_abs_lower,
+        ci_abs_upper,
+        mean_rel_diff,
+        ci_rel_lower,
+        ci_rel_upper
+      )
+    ))
 
-param_contrasts_summary[[exp]] <- param_contrasts_summary_exp %>%
-  filter(parameter != "increase")
-
-param_contrasts_long_exp <- param_contrasts %>%
-  pivot_longer(
-    cols = c(dep, indep),
-    names_to = "consensus",
-    values_to = "value"
-  ) %>%
-  mutate(experiment = exp)
-
-param_contrasts_long <- bind_rows(param_contrasts_long, param_contrasts_long_exp) 
+  
+    print(
+      paste0(
+        "Probability that parameter in ",
+        names(intercept_level),
+        " condition > ",
+        names(comparison_level),
+        " condition:"
+      )
+    )
+    print(param_contrast_summ_exp %>% select(parameter, prob_intercept_gt_contrast))
+    print(
+      paste0(
+        "Probability that parameter in ",
+        names(intercept_level),
+        " condition < ",
+        names(comparison_level),
+        " condition:"
+      )
+    )
+    print(param_contrast_summ_exp %>% select(parameter, prob_intercept_lt_contrast))
+    
+    param_contrasts_summary[[exp]] <- param_contrast_summ_exp %>%
+      filter(parameter != "increase")
+    
+    param_contrasts_long_exp <- param_contrasts %>%
+      pivot_longer(
+        cols = c(condition_effect, intercept),
+        names_to = "consensus",
+        values_to = "value"
+      ) %>%
+      mutate(
+        experiment = exp,
+        comparison = case_when(
+          condition_effect_name == "consensusindependent" ~ "Dependent vs. Independent",
+          condition_effect_name == "consensusdependent_source" ~ "Dependent vs. Dependent Source"
+        )
+      )
+    
+    param_contrasts_long <- bind_rows(param_contrasts_long, param_contrasts_long_exp)
+  }
 }
-
-print("Experiment 1")
-param_contrast_summ_e1 <- param_contrasts_summary[[1]]
-param_contrast_summ_e1[,c(1:3,8:10)]
-print("Probability that parameter in independent condition > dependent condition:")
-param_contrast_summ_e1[,c(1,7)]
-
-
-
-print("Experiment 2")
-param_contrast_summ_e2 <- param_contrasts_summary[[2]]
-param_contrast_summ_e1[,c(1:3,8:10)]
-print("Probability that parameter in independent condition > dependent condition:")
-param_contrast_summ_e2[,c(1,7)]
 ```
 
-They key takeaway from the above table is that the mean asymptote of the independent condition is 22% (E1) and 14% (E2) higher than the asymptote of the dependent condition, and that the 95% credible intervals of these differences do not cross 0, suggesting that we can be quite confident that these differences are stable. The other parameters have comparatively tiny differences across conditions, and credible intervals that overlap substantially with 0, suggesting that they are unlikely to be different across independence conditions.
-
-Additionally, the probability that rate in the independent condition is greater than that of the dependent condition is \>98% in both experiments, whereas it is around chance for the other parameters.
-
-The plots below illustrate this more clearly.
+It looks like that for neither the independent vs. dependent comparison, nor the dependent vs dependent_source comparison, are any parameters fully reliably different at a 95% credible interval (there's some overlap). But it does seem still much closer for the independent comparison than the dependent_source comparison. Also, when you look at how probable it is that asymptote in the Dependent condition < Independent condition, there is a 97% probability that there is a difference.  FOr dependent vs. dependent_source, there's an 87% probability that dependnent > dependent_source. So even though they're small differences, and the 95% credible interval are not showing completely reliable differences, there is still some evidence to suggest differences, especially in the independent comparison-- it just depends on how conservative you want to be. The plot show this more clearly. 
 
 ```{r}
 # Plot
@@ -277,8 +270,8 @@ param_contrasts_long %>%
   filter(parameter != "increase") %>% # remove increase parameter because it is basically the same as asymptote
 ggplot(aes(x = value, colour = consensus, fill = consensus)) +
   stat_halfeye(alpha = 0.6, slab_linewidth = 0.5, slab_color = "black",  normalize = "xy", .width = .95) +
-  facet_wrap(~parameter, scales = "free_x")+
-  facet_grid(experiment ~ parameter , scales = "free") +
+  #facet_wrap(condition_effect_name~parameter, scales = "free_x")+
+  facet_grid(comparison ~ parameter, scales = "free") +
   theme_minimal() +
   labs(
     title = "Posterior Distributions by Consensus Type and Experiment",
@@ -290,10 +283,20 @@ ggplot(aes(x = value, colour = consensus, fill = consensus)) +
   )
 ```
 
-Looks like pretty clear evidence that differences independence are being driven by differences in the asymptote: the maximum effect of source number on confidence for each independence condition, not rate. This suggests that even if you continued to increase the number of dependent sources, a dependent consensus will not be more convincing than an independent consensus, so long as the independent consensus has at least around 10 sources. An interesting and falsifiable prediction that could be tested in future work, showing one example of why I think this approach is useful.
+Above, the plot shows that there are much more reliable differences between the independent and dependent asymptote compared to the dependent vs. dependent source. Something that could be messing the asymptote reliability up a bit though is the difference in the starting points. For some reason, the samples in the dependent source group had a lower starting point in the baseline condition, which is a bit strange, but could be suppressing the influence of asymptote. 
 
-It is also worth noting that even though there are no limits placed on the highest possible asymptote that the model could have estimated, it doesn't really seem to go above 100, which is the maximum of the scale. It is also good to see that the start parameter — which is the effect of independence at baseline (1:1) is basically the same for both types of consensus in both experiments.
+One thing that I've done is just look at the probability that a a paramter in one condition is greater than that of the other condition by looking at the proportion of samples where the difference between conditions was greater than 0. Looking at this, it seems like much stronger evidence for asymptote differences across conditions, with 97% probability that asymptote in the independent condition is greater than that in dependent, and 88% probability that asymptote in the dependent condition is greater than that in the dependent source condition. When we look at the same for rate, these probabilities are close to 50%, suggesting that any differences are most likely being driven by asymptote. 
 
-# Other robustness checks I can do
+# Model comparison
 
-If we wanted to follow this up further, I could also do a model comparison version of this analysis, where I fit different versions of this model, some where I allow certain parameters to vary across consensus conditions, and others where I don't, to see whether allowing a parameter to vary improves its performance. This is basically another way of getting at the same question, but it's good to make sure both methods converge on the same conclusion.
+Another way to try and figure out which parameters are varying across conditions is to perform a model comparison, where we compare models that either allow certain parameters to vary across consensus conditions or not. In other words, it lets us figure out whether assuming that a parameter, such as rate, is different in the independent vs. dependent vs. dependent source condition actually makes the fit relative to complexity better. I ran 8 models, with all possible combination of parameters varying as a function of consensus, where "full" is all parameters varying, and "none" is assuming that parameters are the same across consensus conditions. 
+
+```{r}
+load(file = here("output/looic-model-comparison.Rdata"))
+print("Results of model comparison ordered from best (left) to worst (right) according to LOOIC: ")
+model_looic 
+```
+
+The results suggest that only allowing the increase (asymptote) parameter to vary across time results in the best model performance relative to complexity. It's worth noting though, that the difference between all of the models that assume at least one parameter varies across consensus conditions is quite small (i.e., all models except "none" are separated by only a few points). This fairly large difference between full vs. none suggests so me that there is pretty strong differences across consensus conditions, but this could be mainly driven by the independent condition being quite different from the dependent and dependent source conditions. 
+
+Overall, between the model comparison and the parameter estimates I'd interpret this as there being some evidence there is a) differences between conditions and that b) these difference are driven by asymptote. asymptote between con between independent and the rest, and some evidence to suggest differences beteween dependent and dependent_source, but they're smaller and less reliable. 
