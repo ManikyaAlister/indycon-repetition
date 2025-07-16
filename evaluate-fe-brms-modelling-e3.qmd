@@ -90,9 +90,9 @@ new_data$consensus <- relevel(new_data$consensus, ref = "independent")
 
 ```
 
-
 ```{r}
 plot <- d_predictions %>%
+  mutate(consensus = factor(consensus, levels = c("dependent", "dependent_source","independent"))) %>% # match the colour scheme of E1 & E2
   ggplot(aes(x = additional_sources, color = consensus, fill = consensus)) +
   geom_line(size = 1.2, aes(y = Estimate)) +
   geom_ribbon(aes(ymin = Q2.5, ymax = Q97.5, y = Estimate), alpha = 0.2, color = NA) +
@@ -101,7 +101,7 @@ plot <- d_predictions %>%
   facet_grid(~experiment)+
   labs(
     x = "Number of Additional Sources (Consensus Size Minus 1)",
-    y = "Predicted Confidence",
+    y = "Confidence",
     title = paste0("Confidence Growth by Consensus Type Across Experiments"),
     subtitle = "Modelled using a power function",
     color = "Consensus",
@@ -115,7 +115,7 @@ plot <- d_predictions %>%
 
 plot
 
-ggsave(plot = plot, filename = here(paste0("plots/fe-brms-power-fit.jpg")), width = 7, height = 4)
+ggsave(plot = plot, filename = here(paste0("plots/fe-brms-power-fit-E3.jpg")), width = 7, height = 6)
 ```
 
 Seems like it does pretty well! I've also had a look at some other similar functions, like log or exponential functions, and found that log & power fit similarly better than exponential, but I chose power because I find the parameters more interperetable.
@@ -124,7 +124,7 @@ Now that we know the model fits well, and we can see that an independent consens
 
 # Compare parameters across conditions
 
-The table below shows the absolute means an 95% credible differences between parameters, as well as the *relative* means and 95% credible differences between parameters across independence conditions. The relative differences were calculated because the parameters are on different scales (small differences in rate result in big differences in shape of the curve), so this allows us to see by what % is the parameter in the independent condition than the equivalent in the dependent condition.
+The table below shows the absolute means and 95% credible differences between parameters, as well as the *relative* means and 95% credible differences between parameters across independence conditions. The relative differences were calculated because the parameters are on different scales (small differences in rate result in big differences in shape of the curve), so this allows us to see by what % is the parameter in the independent condition than the equivalent in the dependent condition.
 
 ```{r}
 param_contrasts_summary <- NULL
@@ -261,7 +261,7 @@ for (exp in experiments) {
 }
 ```
 
-It looks like that for neither the independent vs. dependent comparison, nor the dependent vs dependent_source comparison, are any parameters fully reliably different at a 95% credible interval (there's some overlap). But it does seem still much closer for the independent comparison than the dependent_source comparison. Also, when you look at how probable it is that asymptote in the Dependent condition < Independent condition, there is a 97% probability that there is a difference.  FOr dependent vs. dependent_source, there's an 87% probability that dependnent > dependent_source. So even though they're small differences, and the 95% credible interval are not showing completely reliable differences, there is still some evidence to suggest differences, especially in the independent comparison-- it just depends on how conservative you want to be. The plot show this more clearly. 
+It looks like that for neither the independent vs. dependent comparison, nor the dependent vs dependent_source comparison, are any parameters fully reliably different at a 95% credible interval (there's some overlap). But it does seem still much closer for the independent comparison than the dependent_source comparison. Also, when you look at how probable it is that asymptote in the Dependent condition \< Independent condition, there is a 97% probability that there is a difference. FOr dependent vs. dependent_source, there's an 87% probability that dependnent \> dependent_source. So even though they're small differences, and the 95% credible interval are not showing completely reliable differences, there is still some evidence to suggest differences, especially in the independent comparison-- it just depends on how conservative you want to be. The plot show this more clearly.
 
 ```{r}
 # Plot
@@ -283,13 +283,13 @@ ggplot(aes(x = value, colour = consensus, fill = consensus)) +
   )
 ```
 
-Above, the plot shows that there are much more reliable differences between the independent and dependent asymptote compared to the dependent vs. dependent source. Something that could be messing the asymptote reliability up a bit though is the difference in the starting points. For some reason, the samples in the dependent source group had a lower starting point in the baseline condition, which is a bit strange, but could be suppressing the influence of asymptote. 
+Above, the plot shows that there are much more reliable differences between the independent and dependent asymptote compared to the dependent vs. dependent source. Something that could be messing the asymptote reliability up a bit though is the difference in the starting points. For some reason, the samples in the dependent source group had a lower starting point in the baseline condition, which is a bit strange, but could be suppressing the influence of asymptote.
 
-One thing that I've done is just look at the probability that a a paramter in one condition is greater than that of the other condition by looking at the proportion of samples where the difference between conditions was greater than 0. Looking at this, it seems like much stronger evidence for asymptote differences across conditions, with 97% probability that asymptote in the independent condition is greater than that in dependent, and 88% probability that asymptote in the dependent condition is greater than that in the dependent source condition. When we look at the same for rate, these probabilities are close to 50%, suggesting that any differences are most likely being driven by asymptote. 
+One thing that I've done is just look at the probability that a a paramter in one condition is greater than that of the other condition by looking at the proportion of samples where the difference between conditions was greater than 0. Looking at this, it seems like much stronger evidence for asymptote differences across conditions, with 97% probability that asymptote in the independent condition is greater than that in dependent, and 88% probability that asymptote in the dependent condition is greater than that in the dependent source condition. When we look at the same for rate, these probabilities are close to 50%, suggesting that any differences are most likely being driven by asymptote.
 
 # Model comparison
 
-Another way to try and figure out which parameters are varying across conditions is to perform a model comparison, where we compare models that either allow certain parameters to vary across consensus conditions or not. In other words, it lets us figure out whether assuming that a parameter, such as rate, is different in the independent vs. dependent vs. dependent source condition actually makes the fit relative to complexity better. I ran 8 models, with all possible combination of parameters varying as a function of consensus, where "full" is all parameters varying, and "none" is assuming that parameters are the same across consensus conditions. 
+Another way to try and figure out which parameters are varying across conditions is to perform a model comparison, where we compare models that either allow certain parameters to vary across consensus conditions or not. In other words, it lets us figure out whether assuming that a parameter, such as rate, is different in the independent vs. dependent vs. dependent source condition actually makes the fit relative to complexity better. I ran 8 models, with all possible combination of parameters varying as a function of consensus, where "full" is all parameters varying, and "none" is assuming that parameters are the same across consensus conditions.
 
 ```{r}
 load(file = here("output/looic-model-comparison.Rdata"))
@@ -297,6 +297,6 @@ print("Results of model comparison ordered from best (left) to worst (right) acc
 model_looic 
 ```
 
-The results suggest that only allowing the increase (asymptote) parameter to vary across time results in the best model performance relative to complexity. It's worth noting though, that the difference between all of the models that assume at least one parameter varies across consensus conditions is quite small (i.e., all models except "none" are separated by only a few points). This fairly large difference between full vs. none suggests so me that there is pretty strong differences across consensus conditions, but this could be mainly driven by the independent condition being quite different from the dependent and dependent source conditions. 
+The results suggest that only allowing the increase (asymptote) parameter to vary across time results in the best model performance relative to complexity. It's worth noting though, that the difference between all of the models that assume at least one parameter varies across consensus conditions is quite small (i.e., all models except "none" are separated by only a few points). This fairly large difference between full vs. none suggests so me that there is pretty strong differences across consensus conditions, but this could be mainly driven by the independent condition being quite different from the dependent and dependent source conditions.
 
-Overall, between the model comparison and the parameter estimates I'd interpret this as there being some evidence there is a) differences between conditions and that b) these difference are driven by asymptote. asymptote between con between independent and the rest, and some evidence to suggest differences beteween dependent and dependent_source, but they're smaller and less reliable. 
+Overall, between the model comparison and the parameter estimates I'd interpret this as there being some evidence there is a) differences between conditions and that b) these difference are driven by asymptote. asymptote between con between independent and the rest, and some evidence to suggest differences beteween dependent and dependent_source, but they're smaller and less reliable.
