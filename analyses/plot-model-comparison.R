@@ -109,6 +109,7 @@ ggarrange(plotlist = weighted_stacked_plot_list, common.legend = TRUE, nrow = 1)
 
 combined_weighted_group_plot <- ggarrange(plotlist = weighted_group_plot_list, common.legend = TRUE, nrow = 1, legend = "none")
 
+save()
 ggsave(filename = here(paste0("analyses/plots/combined-weighted-group-plot-exp-",experiments_string,".png")), width = 9, height = 5)
 
 ggarrange(plotlist = weighted_group_stacked_plot_list, common.legend = TRUE, nrow = 1)
