@@ -59,4 +59,10 @@ rsconnect/
 data/*
 
 # output folders because they're huge
-output/*
+analyses/output/*
+
+# archive folder
+archive/*
+
+# manuscripts 
+manuscripts/*

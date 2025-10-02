@@ -4,8 +4,8 @@ library(ggpubr)
 library(tidyverse)
 library(brms)
 
-experiment = 3
-model_names <- c("full", "rate",  "increase", "start", "start_increase", "start_rate","rate_increase", "none")# 
+experiment = 2
+model_names <- c("rate",  "increase", "start", "start_increase", "start_rate","rate_increase", "none")# "re_claim", full_hierarchical")#,
 for(j in 1:length(model_names)){
   model_name <- model_names[j]
   models <- list(
@@ -18,8 +18,8 @@ for(j in 1:length(model_names)){
       # My solution is to exponentiation each parameter, meaning that they are functionally constrained to be positive. 
       confidence ~ (exp(start) + exp(increase)) - exp(increase) * (n_sources^(-exp(rate))),
       start ~ 1 + consensus,# + prior_belief,
-      increase ~ 1 + consensus, # + prior_belief,
-      rate ~ 1 + consensus, #+ prior_belief,
+      increase ~ 1 + consensus, #+ prior_belief,
+      rate ~ 1 + consensus,#+ prior_belief,
       nl = TRUE
       
     ),
@@ -72,6 +72,24 @@ for(j in 1:length(model_names)){
       increase ~ 1, 
       rate ~ 1, 
       nl = TRUE
+    ),
+    "full_hierarchical" = bf(
+      confidence ~ (exp(start) + exp(increase)) - exp(increase) * (n_sources^(-exp(rate))),
+      # Each parameter varies by consensus (fixed effect) 
+      # and by claim (hierarchical random effect)
+      start    ~ 1 + consensus + (1 + consensus | claim),
+      increase ~ 1 + consensus + (1 + consensus | claim),
+      rate     ~ 1 + consensus + (1 + consensus | claim),
+      nl = TRUE
+    ),
+    "re_claim" = bf(
+      confidence ~ (exp(start) + exp(increase)) - exp(increase) * (n_sources^(-exp(rate))),
+      # Each parameter varies by consensus (fixed effect) 
+      # and by claim (hierarchical random effect)
+      start    ~ 1 + consensus + (1 | claim),
+      increase ~ 1 + consensus + (1 | claim),
+      rate     ~ 1 + consensus + (1 | claim),
+      nl = TRUE
     )
     
   )
@@ -109,7 +127,8 @@ for(j in 1:length(model_names)){
       if (grepl("start", model)| grepl("full", model)){
         priors <- c(
           priors,
-          make_prior("start",    coef_name, 0, 0.5))
+          make_prior("start",    coef_name, 0, 0.5)
+          )
       }
       
       if (grepl("rate", model)| grepl("full", model)){
@@ -131,7 +150,7 @@ for(j in 1:length(model_names)){
   # do some cleaning
   d_modelling <- data %>%
     mutate(
-      prior_belief = scale(views),
+      prior_belief = as.numeric(scale(views)),
       participant = id,
       consensus = relevel(factor(consensus), ref = "dependent"),
     )
@@ -151,23 +170,6 @@ for(j in 1:length(model_names)){
     "data/experiment-",experiment,"/clean/d-modelling.Rdata"
   )))
   power_priors <- generate_power_priors(d_modelling)
-  
-  # power_priors <- c(
-  #   # Increase
-  #   prior(normal(log(25), 0.5), nlpar = "increase", coef = "Intercept"),
-  #   prior(normal(0, 0.5), nlpar = "increase", coef = "consensusdependent"),
-  #   prior(normal(0, 0.5), nlpar = "increase", coef = "consensusdependent_source"),
-  #   
-  #   # Start
-  #   prior(normal(log(75), 0.5), nlpar = "start", coef = "Intercept"),
-  #   prior(normal(0, 0.5), nlpar = "start", coef = "consensusdependent"),
-  #   prior(normal(0, 0.5), nlpar = "start", coef = "consensusdependent_source"),
-  #   
-  #   # Rate
-  #   prior(normal(log(0.5), 0.2), nlpar = "rate", coef = "Intercept"),
-  #   prior(normal(0, 0.2), nlpar = "rate", coef = "consensusdependent"),
-  #   prior(normal(0, 0.2), nlpar = "rate", coef = "consensusdependent_source")
-  # )
   
   fitHierModel = function(data, form, prior, experiment, form_name){
     

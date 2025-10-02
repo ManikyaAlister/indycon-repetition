@@ -15,6 +15,8 @@ library(tidyverse)
 library(posterior)
 library(here)
 library(ggdist)
+library(raincloudplots)
+
 
 # define experiments
 experiments = c(3)
@@ -25,102 +27,103 @@ for (exp in experiments){
 load(here(paste0("output/fe-brms-exp",exp,"-power-fit-full.Rdata")))
 fits[[exp]] <- fit
 }
+
+
 ```
 
 There are a few reasons why I think modelling this kind of problem using non-linear regression, especially one that follows a power (or any asymptotic growth) function is useful. First, it has unique predictive value, allowing us to estimate how increasing the number of sources will increase confidence, even if we do not have direct empirical measurements for a given source number. This can therefore allow us to do things like predict when adding new sources will stop increasing confidence as a function of different types of consensus manipulations (e.g., independence), with minimal data.
 
-Second, if there are differences in how independence (or any other manipulation, like expertise) affects the consensus X source number relationship, non-linear modelling like this allows us to make inferences about what is driving these differences. Using a power function, like I do here, we can infer whether source independence affects the rate at which confidence increases with multiple sources, whether it affects the highest possible confidence (asymptote) that increasing the number of sources will produce, or both. Therefore, I think doing this kind of analysis can provide added benefit beyond something like a mixed source number X independence ANOVA. That being said, you might not think the extra insights that can be gained by this approach are that important for the current study, which I would completely understand! I have been wanting to try this kind of analysis for a while, so it won't have been a waste of time for me if we don't end up using it.
+This type of modelling also corresponds well to theoretical models describing the relationship between persuasion and social group size (Bond, 2005).
+
+Third, if there are differences in how independence (or any other manipulation, like expertise) affects the consensus X source number relationship, non-linear modelling like this allows us to make inferences about what is driving these differences. Using a power function, like I do here, we can infer whether source independence affects the rate at which confidence increases with multiple sources, whether it affects the highest possible confidence (asymptote) that increasing the number of sources will produce, or both. Therefore, I think doing this kind of analysis can provide added benefit beyond something like a mixed source number X independence ANOVA. That being said, you might not think the extra insights that can be gained by this approach are that important for the current study, which I would completely understand! I have been wanting to try this kind of analysis for a while, so it won't have been a waste of time for me if we don't end up using it.
+
+# Comparing prior belief vs. baseline
+
+A relevant question for relevant for our modelling approach is how to deal with participants' reported prior beliefs compared to the baseline condition, where there is 1 person agreeing with the claim, and 1 person disagreeing. In theory, it would be nice to control for people's prior beliefs in some way. In all of my previous consensus studies we have done this, in order to account for the fact that people who already have strong prior beliefs are less likely to shift them. There are a few problems with this in the current study, though.
+
+1.  There is only one trial per participant, so you cannot control for individual variation in priors in the same way as you normally would (i.e., with a random intercept).
+2.  As I will show, the prior and baseline condition are *highly* correlated, meaning that controlling for controlling for prior belief as a fixed effect could be problematic, and artificlally reduce the predictive power of the model and result in issues of multicollinearity.
+
+## Does confidence change from prior to baseline? 
+
+If we can treat prior and baseline as essentially the same, this will vastly simplify our modelling, as we can treat the baseline condition as people's priors. First, let's check the correlation
+
+```{r}
+source(here("analyses/prior-baseline-comparison.R"))
+
+all_corr_plots <- vector("list", length = length(experiments))
+
+for (i in 1:length(experiments)){
+  all_corr_plots[[i]] <- checkPriorBaselineCorr(i)
+}
+
+
+combined_corr_plot <- ggarrange(plotlist = all_corr_plots)
+combined_corr_plot
+```
+
+These plots show very high correlations between someone's prior belief and their confidence at baseline. Now lets compare the means of the groups and their distributions.
+
+```{r}
+
+all_group_plots <- vector("list", length = length(experiments))
+
+for (i in 1:length(experiments)){
+  exp <- experiments[i]
+  all_group_plots[[i]] <- checkPriorBaselineGroups(exp)
+}
+
+
+combined_group_plot <- ggarrange(plotlist = all_group_plots)
+combined_group_plot
+```
+
+These plots show that scores are pretty much the same from prior to baseline. Although some participants do seem to change their rating, this appears to be the vast minority, and at the group level the distributions look similar. The means are also not significantly different from each other.
+
+Something else that's interesting is that the baseline condition seems to bring the distribution more towards the middle, somewhat nullifying the effect of priors (i.e., the baseline distribution is more symmetrical around 0).
+
+Taken together, I would argue that it's safe to ignore prior beliefs in the modelling and instead focus only on how beliefs change from baseline.
 
 # Evaluating model fit
 
-Here, we can see whether the functional (power) form, describes the relationship between confidence and number of sources for both independence types.
+Here, we can see whether the functional (power) form, describes the relationship between confidence and number of sources for each dependence condition.
 
 ```{r}
-d_predictions <- NULL
-d_empirical_summ <- NULL
-
-for (exp in experiments) {
-  
-  # get predictions from estimated parameters for each experiment and load actual experiment data for each experiment
-  
-  fit <- fits[[exp]]
-  
-
-  # load and combine empirical data 
-  load(here("data/experiment-3/clean/d-modelling.Rdata"))  
-  
-  # summarise empirical data for plotting
-  d_summ_exp <- d_modelling %>%
-    mutate(additional_sources = n_sources - 1) %>%
-    group_by(consensus, additional_sources) %>%
-    summarise(mean = mean(confidence),
-              sd = sd(confidence),
-              n = n()) %>%
-    mutate(se = sd / sqrt(n),
-           experiment = exp)
-  
-  d_empirical_summ <- bind_rows(d_empirical_summ, d_summ_exp)
-  
-  # Make a prediction grid that spans all values of n_sources for both consensus types
-  mean_prior_belief <- mean(d_modelling$prior_belief, na.rm = TRUE)
-
-  new_data <- expand.grid(
-  n_sources = seq(1, 10, length.out = 50),
-  consensus = c("dependent", "independent", "dependent_source"),
-  prior_belief = mean_prior_belief
-) %>%
-  as_tibble()
-
-new_data$consensus <- relevel(new_data$consensus, ref = "independent")
-
-
-# Predict using fixed effects only (no partial pooling)
-  d_predictions_exp  <- fitted(fit, newdata = new_data, re_formula = NA) %>%
-  as_tibble() %>%
-  bind_cols(new_data) %>%
-  mutate(
-    additional_sources = n_sources - 1,
-    experiment = exp
-  )
-  
-  d_predictions <- bind_rows(d_predictions, d_predictions_exp)
-
-  
-}
-
+plotFit(exp = 1,
+        title = "Experiment 1",
+        subtitle = NULL)
 ```
 
 ```{r}
-plot <- d_predictions %>%
-  mutate(consensus = factor(consensus, levels = c("dependent", "dependent_source","independent"))) %>% # match the colour scheme of E1 & E2
-  ggplot(aes(x = additional_sources, color = consensus, fill = consensus)) +
-  geom_line(size = 1.2, aes(y = Estimate)) +
-  geom_ribbon(aes(ymin = Q2.5, ymax = Q97.5, y = Estimate), alpha = 0.2, color = NA) +
-  geom_point(data = d_empirical_summ, aes(y = mean))+
-  geom_errorbar(data = d_empirical_summ, aes(ymin = mean - se, ymax = mean + se))+
-  facet_grid(~experiment)+
-  labs(
-    x = "Number of Additional Sources (Consensus Size Minus 1)",
-    y = "Confidence",
-    title = paste0("Confidence Growth by Consensus Type Across Experiments"),
-    subtitle = "Modelled using a power function",
-    color = "Consensus",
-    fill = "Consensus"
-  ) +
-  scale_fill_viridis_d(option = "D")+
-  scale_colour_viridis_d(option = "D")+
-  scale_x_continuous(breaks = seq(0,9,3))+
-  theme_minimal(base_size = 12)+
-  theme(legend.position = "bottom")
+plotFit(exp = 2,
+        title = "Experiment 2",
+        subtitle = NULL)
+```
 
-plot
-
-ggsave(plot = plot, filename = here(paste0("plots/fe-brms-power-fit-E3.jpg")), width = 7, height = 6)
+```{r}
+plotFit(exp = 3,
+        title = "Experiment 3",
+        subtitle = NULL)
 ```
 
 Seems like it does pretty well! I've also had a look at some other similar functions, like log or exponential functions, and found that log & power fit similarly better than exponential, but I chose power because I find the parameters more interperetable.
 
-Now that we know the model fits well, and we can see that an independent consensus clearly results in greater increases in confidence as a function of the number of sources, we can try and figure out what is driving these differences. Specifically, whether it is rate of increase, asymptote, or both.
+Now that we know the model fits well, we can investigate what is driving any differences between conditions. Specifically, whether they are driven by differences in rate of increase, asymptote, or both.
+
+# Model comparison
+
+Another way to try and figure out which parameters are varying across conditions is to perform a model comparison, where we compare models that either allow certain parameters to vary across consensus conditions or not. In other words, it lets us figure out whether assuming that a parameter, such as rate, is different in the independent vs. dependent vs. dependent source condition actually makes the fit relative to complexity better. I ran 8 models, with all possible combination of parameters varying as a function of consensus, where "full" is all parameters varying, and "none" is assuming that parameters are the same across consensus conditions.
+
+```{r}
+load(file = here("output/looic-model-comparison.Rdata"))
+print("Results of model comparison ordered from best (left) to worst (right) according to LOOIC: ")
+model_looic 
+```
+
+The results suggest that only allowing the increase (asymptote) parameter to vary across time results in the best model performance relative to complexity. It's worth noting though, that the difference between all of the models that assume at least one parameter varies across consensus conditions is quite small (i.e., all models except "none" are separated by only a few points). This fairly large difference between full vs. none suggests so me that there is pretty strong differences across consensus conditions, but this could be mainly driven by the independent condition being quite different from the dependent and dependent source conditions.
+
+Overall, between the model comparison and the parameter estimates I'd interpret this as there being some evidence there is a) differences between conditions and that b) these difference are driven by asymptote. asymptote between con between independent and the rest, and some evidence to suggest differences beteween dependent and dependent_source, but they're smaller and less reliable.
+
 
 # Compare parameters across conditions
 
@@ -286,17 +289,3 @@ ggplot(aes(x = value, colour = consensus, fill = consensus)) +
 Above, the plot shows that there are much more reliable differences between the independent and dependent asymptote compared to the dependent vs. dependent source. Something that could be messing the asymptote reliability up a bit though is the difference in the starting points. For some reason, the samples in the dependent source group had a lower starting point in the baseline condition, which is a bit strange, but could be suppressing the influence of asymptote.
 
 One thing that I've done is just look at the probability that a a paramter in one condition is greater than that of the other condition by looking at the proportion of samples where the difference between conditions was greater than 0. Looking at this, it seems like much stronger evidence for asymptote differences across conditions, with 97% probability that asymptote in the independent condition is greater than that in dependent, and 88% probability that asymptote in the dependent condition is greater than that in the dependent source condition. When we look at the same for rate, these probabilities are close to 50%, suggesting that any differences are most likely being driven by asymptote.
-
-# Model comparison
-
-Another way to try and figure out which parameters are varying across conditions is to perform a model comparison, where we compare models that either allow certain parameters to vary across consensus conditions or not. In other words, it lets us figure out whether assuming that a parameter, such as rate, is different in the independent vs. dependent vs. dependent source condition actually makes the fit relative to complexity better. I ran 8 models, with all possible combination of parameters varying as a function of consensus, where "full" is all parameters varying, and "none" is assuming that parameters are the same across consensus conditions.
-
-```{r}
-load(file = here("output/looic-model-comparison.Rdata"))
-print("Results of model comparison ordered from best (left) to worst (right) according to LOOIC: ")
-model_looic 
-```
-
-The results suggest that only allowing the increase (asymptote) parameter to vary across time results in the best model performance relative to complexity. It's worth noting though, that the difference between all of the models that assume at least one parameter varies across consensus conditions is quite small (i.e., all models except "none" are separated by only a few points). This fairly large difference between full vs. none suggests so me that there is pretty strong differences across consensus conditions, but this could be mainly driven by the independent condition being quite different from the dependent and dependent source conditions.
-
-Overall, between the model comparison and the parameter estimates I'd interpret this as there being some evidence there is a) differences between conditions and that b) these difference are driven by asymptote. asymptote between con between independent and the rest, and some evidence to suggest differences beteween dependent and dependent_source, but they're smaller and less reliable.
