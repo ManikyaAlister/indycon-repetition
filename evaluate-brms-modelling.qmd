@@ -1,0 +1,612 @@
+---
+title: "Modelling the impact of increasing sources using Bayesian, non-linear (power function) regressions"
+author: "Manikya Alister"
+format: 
+  # html:
+  #  embed-resources: true
+  docx:
+    reference-doc: apa-7-template.docx
+editor: visual
+message: false
+warning: false
+code-fold: true
+prefer-html: true # so that rendering doesn't break for non-html when using html commands
+toc: true
+echo: false
+---
+
+```{r}
+library(tidyverse)
+library(posterior)
+library(here)
+library(ggdist)
+library(raincloudplots) 
+library(knitr)
+library(ggpubr)
+library(brms)
+#library(gtsummary)
+library(flextable)
+
+```
+
+# Experiment 1
+
+## Results
+
+Full data and analysis code can be found at \[link\]
+
+### Non-linear Bayesian Modelling
+
+To evaluate the the how relationship between consensus size and participants' confidence in the claim varied as a function of the independence of consensus, we ran a set of Bayesian non-linear regression models. Specifically, we modeled the relationship between consensus size and confidence using a *power*\footnote{We also assessed exponential and logarithmic functions that have slightly different shapes, but the power funciton appeared to fit the data best, although there was only a small differnce in performance between the different functions (see Supplementary Materials).}function:
+
+$$
+(start + increase) - increase \times n^{-rate}
+$$
+
+Where *start* is a free parameter indicating the initial point of confidence at baseline: confidence when there is one person agreeing and another disagreeing (no consensus). *Increase* is a free parameter indicating the maximum amount that confidence will grow as a function of consensus size, *n*. *Increase* + *Start* therefore represents the asymptote of confidence. *Rate* is a free parameter that controls how quickly confidence grows as a function of consensus size. This equation therefore assumes that confidence increases as a function of consensus size up until a certain point.
+
+We modeled the effect of consensus on each parameter as a fixed effect, where "consensus" refers to the consensus independence condition:
+
+$$
+Start \sim 1 + consensus
+$$
+
+$$
+Increase \sim 1 + consensus
+$$
+
+$$
+Rate \sim 1 + consensus
+$$
+
+This modelling approach has several advantages. First, the power function we use corresponds well to existing theoretical models that have attempted to describe the relationship between conformity and social group size (Bond, 2005; Latané, 1981).
+
+Second, this approach has unique predictive value, allowing us to estimate how increasing the number of sources will increase confidence, even if we do not have direct empirical measurements for a given source number (i.e., our experiment only tests consensus sizes of 4, 7, and 10. This can therefore allow us to do things like predict when adding new sources will stop increasing confidence as a function of different types of consensus manipulations (e.g., independence), with minimal data.
+
+Third, and perhaps most importantly, the parameters in the model are easily interpretable, neatly corresponding to various mechanisms that could be driving different consensus effects. If there are differences in how independence influences the consensus size X confidence relationship, our model allows us to infer the mechanisms that are driving these differences. Specifically, we can infer whether source independence affects the *rate* at which confidence increases with multiple sources, whether it affects the maximum amount that confidence will *increase* as a function of consensus size, or both.
+
+Last, our Bayesian approach is advantageous as it allows us to quantify the posterior probability of different parameter values, rather than quantify the likelihood of a result as extreme as ours assuming the null hypothesis is true, as is the case with *p* values derived from frequentest methods. This advantage is derived from the fact that a Bayesian approach yields full distributions of parameter estimates, which frequentest analyses do not. This distribution also permits intuitive quantification of the uncertainty of our estimates using *credible intervals.* In our analyses, we examine 95% credible intervals, which tell us the range in which, given the data and prior, there is a 95% probability that the parameter falls.
+
+The models were implemented using the R package *brms* (Buerkner 2017; 2018) version 2.23.0, which is a package that facilitates Bayesian modelling by interfacing with the probabilistic programming language Stan (Stan Development Team, 2020; n.d). The analyses were run using R version 4.5.1 (2025-06-13). See the supplementary materials and analysis code for the full implementation of the different models and their priors.
+
+#### Model Fit
+
+As shown in Figure X, our full model, which assumes that all parameters (*start*, *rate*, and *increase)* vary across consensus conditions, provided a good fit of the experimental data. Importantly, it captured the empirical trend whereby confidence increased quickly with initial increases in consensus size before reaching an asymptote. Figure X also suggests that there is a clear distinction between the trajectories of the independent and dependent consensus conditions. In the next section we attempt to uncover what may be driving these differences.
+
+```{r}
+source(here("analyses/plot-fits.R")) # source function that plots the model fit 
+
+plotFit(exp = 1,
+        title = "Experiment 1",
+        subtitle = NULL)
+```
+
+#### Model Comparison
+
+In Figure X, our modelling suggests that there is a clear distinction between the trajectories of the independent and dependent consensus conditions respectively. However, it is not clear what is driving these differences. Specifically, it is unclear whether independence results in *faster* growth in confidence (i.e., is driven by the *rate* parameter), results in higher maximum increases in confidence (i.e., is driven by the *increase* parameter) or is driven by both mechanisms.
+
+To test these possibilities, we conducted a model comparison whereby we ran models that assumed that different combinations of parameters varied across consensus conditions. For example, in the *increase* model, *increase* was the only parameter that could vary across consensus conditions, meaning it was the only parameter that could explain any differences in that model. Similarly, the *increase + rate* model assumed that both *increase* and *rate* varied across conditions. We also had a *full* model that assumed all parameters varied across conditions, a *null* model, that assumed no changes in any parameter across conditions, and all other possible combinations (see Table X). We then compared model performance using Leave One Out Cross Validation (LOOIC), which balances model complexity with model fit. This approach therefore allowed us to examine 1) whethere any differences between conditions were statistically reliable, and 2) which parameters were driving these differences.
+
+The results of the model comparison are in @tbl-m-comp-e1. It shows that the best performing model in Experiment 1 according to LOOIC was the *increase* model, that assumes only the increase parameter varies across conditions. This result suggests that 1) there are statistically credible differences in the relationship between consensus size and confidence between independent and dependent consensuses and 2) that independence results in a larger maximum increase in confidence, but not a *faster* increase in confidence relative to the dependent consensus. It is also a good sanity check that differences in conditions are not driven by differences in their baseline confidence (*start*) since there is no consensus independence manipulation in the baseline 1:1 trial.
+
+```{r}
+#| label: tbl-m-comp-e1
+#| tbl-cap: "Model comparison using LOOIC (lower LOOIC = better performance). "
+
+load(here("analyses/output/looic-model-comparison-e1.Rdata"))
+model_full_names <- c("Null", "Rate", "Increase", "Start", "Start + Increase", "Start + Rate", "Rate + Increase", "Full Model")
+
+modelComparisonTable= function(model_looic, model_full_names){
+  model_comparison <- model_looic %>%
+  mutate(Rank = rank(LOOIC),
+        LOOIC = as.character(round(LOOIC, 2)), # as chatacter to stop it from ading a "," in LOOIC value
+        SE = round(SE, 2),
+        Model = model_full_names
+        ) %>%
+  select(-experiment, -model) %>%
+relocate(Model) 
+
+autofit(flextable(model_comparison))
+}
+
+modelComparisonTable(model_looic, model_full_names)
+
+```
+
+@tbl-params-e1 shows the parameter estimates of the best performing model (the *Increase*) model, and the 95% credible intervals of those estimates. The estimates suggests that confidence grew from the scale mid point (50).
+
+```{r}
+#| label: tbl-params-e1
+#| tbl-cap: "Parameter estimates of the best performing model in Experument 1: the *Increase* model, in which the Increase parameter is the only parameter that can vary across consensus independence conditions. This change across conditions is operationalised by estimating Increase for the baseline condition (the *Dependent* condition), then estimating the *change* in that paremter in the independent condition. "
+
+load(here("analyses/output/fe-brms-exp1-power-fit-increase.Rdata"))
+param_names <- c("Start",
+                 "Increase (Baseline)",
+                 "Increase (Effect of Independence)",
+                 "Rate")
+
+extractEstimates = function(fit, param_names){
+  summ_fit <- summary(fit)
+estimates <- summ_fit$fixed %>%
+  mutate(
+    Parameters = param_names,
+    Estimate = round(exp(Estimate),2),
+    `l-95% CI` = round(exp(`l-95% CI`), 2),
+    `u-95% CI` = round(exp(`u-95% CI`), 2),
+    Est.Error = round(Est.Error,2)
+    
+  ) %>%
+  select(-Rhat, -Bulk_ESS, -Tail_ESS)  %>%
+  relocate(Parameters) %>%
+  remove_rownames()
+
+autofit(flextable(estimates))
+
+}
+
+
+extractEstimates(fit, param_names)
+
+```
+
+# Experiment 2
+
+## Results
+
+### Non-linear Bayesian Modelling
+
+We conducted the same non-linear Bayesian regression modelling as in Experiment 1.
+
+#### Model Fit
+
+The model fit similarly well as in Experiment 1, if not slightly better (see Figure X).
+
+```{r}
+plotFit(exp = 2,
+        title = "Experiment 2",
+        subtitle = NULL)
+```
+
+#### Model Comparison
+
+We performed the same model comparison (with the same models) as in Experiment 1. The qualitative results were basically identical, with the *Increase* *model* performing the best, followed by the *Rate +* *Increase* model.
+
+```{r}
+#| label: tbl-m-comp-e2
+#| tbl-cap: "Model comparison using LOOIC (lower LOOIC = better performance). "
+
+load(here("analyses/output/looic-model-comparison-e2.Rdata"))
+
+modelComparisonTable(model_looic, model_full_names)
+```
+
+As before, the parameters of the best performing (*increase*) model are in @tbl-m-comp-e2. As in Experiment 1, they show that the model estimated a small but statistically reliable difference in the *Increase* parameter, as evidence by the 95% credible intervals of *Increase (Effect of Independence)* not crossing zero.
+
+```{r}
+#| label: tbl-params-e2
+#| tbl-cap: "Parameter estimates of the best performing model in Experument 2: the *Increase* model, in which the Increase parameter is the only parameter that can vary across consensus independence conditions. This change across conditions is operationalised by estimating Increase for the baseline condition (the *Dependent* condition), then estimating the *change* in that paremter in the independent condition. "
+
+load(here("analyses/output/fe-brms-exp2-power-fit-increase.Rdata"))
+param_names <- c("Start",
+                 "Increase (Baseline)",
+                 "Increase (Effect of Independence)",
+                 "Rate")
+
+
+
+extractEstimates(fit, param_names)
+```
+
+# Experiment 3
+
+## Results
+
+### Non-linear Bayesian Modelling
+
+We once again implemented the same non-linear Bayesian regression models as in Experiments 1 and 2. Ideally, in Experiment 3 we would have run a hierarchical model that estimated each parameter both at the group level, and at the level of each individual claim. However, we had insufficient observations for such an approach, which would have therefore resulted in convergence issues unless stronger priors were implemented, in which case the estimates would have been heavily influenced by the priors rather than reflecting any empirical observations.
+
+#### Model Fit
+
+As per Figure X, the model provides a good fit for all three consensus independence conditions.
+
+```{r}
+plotFit(exp = 3,
+        title = "Experiment 2",
+        subtitle = NULL)
+```
+
+#### Model Comparison
+
+We conducted the same model comparison (with the same models) as experiments 1 and 2 (see @tbl-m-comp-e3). Once again, the *Increase* model performed best, suggesting that differences across all three conditions were likely to be driven by differences in the maximum growth in confidence as a function of increased consensus size. However, it is worth noting that in Experiment 3, the next best model was the *Rate* model, and that the differences between the *Rate* and *Increase* model were very small. It is therefore possible that changes across conditions were driven by both *Rate* and *Increase,* but the model comparison did not favor the *Rate + Increase* model due to insufficient power (LOOIC penalizes complex models more when *n* is smaller; Vehtari et al., 2017).
+
+```{r}
+#| label: tbl-m-comp-e3
+#| tbl-cap: "Model comparison using LOOIC (lower LOOIC = better performance). "
+
+load(here("analyses/output/looic-model-comparison-e3.Rdata"))
+modelComparisonTable(model_looic, model_full_names)
+```
+
+```{r}
+#| label: tbl-params-e3
+#| tbl-cap: "Parameter estimates of the best performing model in Experument 3: the *Increase* model, in which the Increase parameter is the only parameter that can vary across consensus independence conditions. This change across conditions is operationalised by estimating Increase for the baseline condition (the *Dependent* condition), then estimating the *change* in that paremter in the independent condition. "
+
+load(here("analyses/output/fe-brms-exp3-power-fit-increase.Rdata"))
+param_names <- c("Start",
+                "Increase (Baseline)",
+                 "Increase (Effect of Dependent Source)",
+                 "Increase (Effect of Independence)",
+                 "Rate")
+extractEstimates(fit, param_names) # PROBLEM: Exp is obscuring legit negative fixed effects. 
+# Also, should I be exponentiating the errors??? 
+# Soome follow up on Exp 3 might be important so that we know if increase is best for ALL conditions 
+```
+
+```{r}
+load(here("analyses/output/combined-weighted-group-plot-exp-1-2-3.Rdata"))
+combined_weighted_group_plot
+```
+
+# References
+
+-   Bond, R. (2005). Group Size and Conformity. *Group Processes & Intergroup Relations*, *8*(4), 331–354. <https://doi.org/10.1177/1368430205056464>
+
+-   Latané, B. (1981). The psychology of social impact. *American Psychologist*, *36*(4), 343–356. <https://doi.org/10.1037/0003-066X.36.4.343>
+
+-   Paul-Christian Buerkner (2017). brms: An R Package for Bayesian Multilevel Models Using Stan. *Journal of Statistical Software*, 80(1), 1-28. `doi:10.18637/jss.v080.i01`
+
+-   Paul-Christian Buerkner (2018). Advanced Bayesian Multilevel Modeling with the R Package brms. *The R Journal*. 10(1), 395–411. `doi:10.32614/RJ-2018-017`
+
+-   The Stan Development Team (n.d). *Stan Modeling Language User's Guide and Reference Manual*. <https://mc-stan.org/users/documentation/>.
+
+-   Stan Development Team (2020). RStan: the R interface to Stan. R package version 2.21.2. <https://mc-stan.org/>
+
+-   Vehtari, A., Gelman, A., & Gabry, J. (2017). Practical Bayesian model evaluation using leave-one-out cross-validation and WAIC. *Statistics and Computing*, *27*(5), 1413–1432. <https://doi.org/10.1007/s11222-016-9696-4>
+
+There are a few reasons why I think modelling this kind of problem using non-linear regression, especially one that follows a power (or any asymptotic growth) function is useful.
+
+Third, That being said, you might not think the extra insights that can be gained by this approach are that important for the current study, which I would completely understand! I have been wanting to try this kind of analysis for a while, so it won't have been a waste of time for me if we don't end up using it.
+
+# Comparing prior belief vs. baseline
+
+A relevant question for relevant for our modelling approach is how to deal with participants' reported prior beliefs compared to the baseline condition, where there is 1 person agreeing with the claim, and 1 person disagreeing. In theory, it would be nice to control for people's prior beliefs in some way. In all of my previous consensus studies we have done this, in order to account for the fact that people who already have strong prior beliefs are less likely to shift them. There are a few problems with this in the current study, though.
+
+1.  There is only one trial per participant, so you cannot control for individual variation in priors in the same way as you normally would (i.e., with a random intercept).
+2.  As I will show, the prior and baseline condition are *highly* correlated, meaning that controlling for controlling for prior belief as a fixed effect could be problematic, and artificlally reduce the predictive power of the model and result in issues of multicollinearity.
+
+## Does confidence change from prior to baseline?
+
+If we can treat prior and baseline as essentially the same, this will vastly simplify our modelling, as we can treat the baseline condition as people's priors. First, let's check the correlation
+
+```{r}
+experiments = 1:3
+
+source(here("analyses/prior-baseline-comparison.R"))
+
+all_corr_plots <- vector("list", length = length(experiments))
+
+for (i in 1:length(experiments)){
+  all_corr_plots[[i]] <- checkPriorBaselineCorr(i)
+}
+
+
+combined_corr_plot <- ggarrange(plotlist = all_corr_plots)
+combined_corr_plot
+```
+
+These plots show very high correlations between someone's prior belief and their confidence at baseline. Now lets compare the means of the groups and their distributions.
+
+```{r}
+all_group_plots <- vector("list", length = length(experiments))
+
+for (i in 1:length(experiments)){
+  exp <- experiments[i]
+  all_group_plots[[i]] <- checkPriorBaselineGroups(exp)
+}
+
+
+combined_group_plot <- ggarrange(plotlist = all_group_plots)
+combined_group_plot
+```
+
+These plots show that scores are pretty much the same from prior to baseline. Although some participants do seem to change their rating, this appears to be the vast minority, and at the group level the distributions look similar. The means are also not significantly different from each other.
+
+Something else that's interesting is that the baseline condition seems to bring the distribution more towards the middle, somewhat nullifying the effect of priors (i.e., the baseline distribution is more symmetrical around 0).
+
+Taken together, I would argue that it's safe to ignore prior beliefs in the modelling and instead focus only on how beliefs change from baseline.
+
+# Evaluating model fit
+
+Here, we can see whether the functional (power) form, describes the relationship between confidence and number of sources for each dependence condition.
+
+```{r}
+plotFit(exp = 2,
+        title = "Experiment 2",
+        subtitle = NULL)
+```
+
+```{r}
+plotFit(exp = 3,
+        title = "Experiment 3",
+        subtitle = NULL)
+```
+
+Seems like it does pretty well! I've also had a look at some other similar functions, like log or exponential functions, and found that log & power fit similarly better than exponential, but I chose power because I find the parameters more interperetable.
+
+Now that we know the model fits well, we can investigate what is driving any differences between conditions. Specifically, whether they are driven by differences in rate of increase, asymptote, or both.
+
+# Model comparison
+
+Another way to try and figure out which parameters are varying across conditions is to perform a model comparison, where we compare models that either allow certain parameters to vary across consensus conditions or not. In other words, it lets us figure out whether assuming that a parameter, such as rate, is different in the independent vs. dependent vs. dependent source condition actually makes the fit relative to complexity better. I ran 8 models, with all possible combination of parameters varying as a function of consensus, where "full" is all parameters varying, and "none" is assuming that parameters are the same across consensus conditions.
+
+```{r}
+#| eval: false
+load(file = here("analyses/output/looic-model-comparison.Rdata"))
+print("Results of model comparison ordered from best (left) to worst (right) according to LOOIC: ")
+model_looic 
+```
+
+The results suggest that only allowing the increase (asymptote) parameter to vary across time results in the best model performance relative to complexity. It's worth noting though, that the difference between all of the models that assume at least one parameter varies across consensus conditions is quite small (i.e., all models except "none" are separated by only a few points). This fairly large difference between full vs. none suggests so me that there is pretty strong differences across consensus conditions, but this could be mainly driven by the independent condition being quite different from the dependent and dependent source conditions.
+
+Overall, between the model comparison and the parameter estimates I'd interpret this as there being some evidence there is a) differences between conditions and that b) these difference are driven by asymptote. asymptote between con between independent and the rest, and some evidence to suggest differences beteween dependent and dependent_source, but they're smaller and less reliable.
+
+# Compare parameters across conditions
+
+The table below shows the absolute means and 95% credible differences between parameters, as well as the *relative* means and 95% credible differences between parameters across independence conditions. The relative differences were calculated because the parameters are on different scales (small differences in rate result in big differences in shape of the curve), so this allows us to see by what % is the parameter in the independent condition than the equivalent in the dependent condition.
+
+```{r}
+#| eval: false
+param_contrasts_summary <- NULL
+param_contrasts_long <- NULL
+intercept_level <- c("Dependent" = "consensusdependent")
+comparison_levels <- c("Independent" = "consensusindependent", "Dependent Source" = "consensusdependent_source")
+
+
+for (exp in experiments) {
+  fit <- fits[[exp]]
+  
+  print("Model fit: ")  
+  #print(summary(fit)$fixed %>% select(-Bulk_ESS,-Tail_ESS))
+  
+  # Extract draws
+  draws <- as_draws_df(fit)
+  
+  # 2. Helper to extract and transform parameters
+  get_param_contrasts <- function(draws,
+                                  param_name,
+                                  condition_effect_name) {
+    # asymptote is start + increase
+    if (param_name == "asymptote") {
+      start_intercept <- draws[["b_start_Intercept"]]
+      increase_intercept <- draws[["b_increase_Intercept"]]
+      
+      intercept <- exp(start_intercept) + exp(increase_intercept)
+      condition_effect <- exp(start_intercept + draws[[paste0("b_start_", condition_effect_name)]]) + exp(increase_intercept + draws[[paste0("b_increase_", condition_effect_name)]]) #+ intercept
+      
+    } else{
+      intercept_raw <- draws[[paste0("b_", param_name, "_Intercept")]]
+      intercept <- exp(intercept_raw)
+      condition_effect <- exp(intercept_raw + draws[[paste0("b_", param_name, "_", condition_effect_name)]])
+    }
+    
+    tibble(
+      parameter = param_name,
+      condition_effect_name = condition_effect_name,
+      condition_effect = condition_effect,
+      intercept = intercept,
+      abs_diff = intercept - condition_effect,
+      rel_diff = (intercept - condition_effect) / condition_effect
+    )
+  }
+  
+  # Individual parameter contrasts
+  log_params <- c("rate", "asymptote", "start")
+  
+  for (i in 1:length(comparison_levels)) {
+    comparison_level <- comparison_levels[i]
+    param_contrasts <- bind_rows(lapply(log_params, function(p)
+      get_param_contrasts(draws, p, comparison_level)))
+    
+    # 5. Summarise posterior contrasts
+    param_contrast_summ_exp <- param_contrasts %>%
+      group_by(parameter) %>%
+      summarise(
+        mean_cond_effect = mean(condition_effect),
+        mean_intercept = mean(intercept),
+        mean_abs_diff = mean(abs_diff),
+        ci_abs_lower = quantile(abs_diff, 0.025),
+        ci_abs_upper = quantile(abs_diff, 0.975),
+        prob_intercept_gt_contrast = mean(abs_diff > 0),
+        prob_intercept_lt_contrast = mean(abs_diff < 0),
+        prob_intercept_diff_contrast = prob_intercept_gt_contrast - prob_intercept_lt_contrast,
+        
+        
+        mean_rel_diff = mean(rel_diff),
+        ci_rel_lower = quantile(rel_diff, 0.025),
+        ci_rel_upper = quantile(rel_diff, 0.975)
+      ) %>%
+      arrange(match(parameter, c(
+        "rate", "increase", "start", "asymptote"
+      )))
+    
+    print(paste0(names(intercept_level), " vs. ", names(comparison_level)))
+    #param_contrast_summ_exp <- param_contrasts_summary[[1]]
+    
+    print(knitr::kable(
+      param_contrast_summ_exp %>% select(
+        parameter,
+        mean_cond_effect,
+        mean_intercept,
+        mean_abs_diff,
+        ci_abs_lower,
+        ci_abs_upper,
+        mean_rel_diff,
+        ci_rel_lower,
+        ci_rel_upper
+      )
+    ))
+
+  
+    print(
+      paste0(
+        "Probability that parameter in ",
+        names(intercept_level),
+        " condition > ",
+        names(comparison_level),
+        " condition:"
+      )
+    )
+    print(param_contrast_summ_exp %>% select(parameter, prob_intercept_gt_contrast))
+    print(
+      paste0(
+        "Probability that parameter in ",
+        names(intercept_level),
+        " condition < ",
+        names(comparison_level),
+        " condition:"
+      )
+    )
+    print(param_contrast_summ_exp %>% select(parameter, prob_intercept_lt_contrast))
+    
+    param_contrasts_summary[[exp]] <- param_contrast_summ_exp %>%
+      filter(parameter != "increase")
+    
+    param_contrasts_long_exp <- param_contrasts %>%
+      pivot_longer(
+        cols = c(condition_effect, intercept),
+        names_to = "consensus",
+        values_to = "value"
+      ) %>%
+      mutate(
+        experiment = exp,
+        comparison = case_when(
+          condition_effect_name == "consensusindependent" ~ "Dependent vs. Independent",
+          condition_effect_name == "consensusdependent_source" ~ "Dependent vs. Dependent Source"
+        )
+      )
+    
+    param_contrasts_long <- bind_rows(param_contrasts_long, param_contrasts_long_exp)
+  }
+}
+```
+
+It looks like that for neither the independent vs. dependent comparison, nor the dependent vs dependent_source comparison, are any parameters fully reliably different at a 95% credible interval (there's some overlap). But it does seem still much closer for the independent comparison than the dependent_source comparison. Also, when you look at how probable it is that asymptote in the Dependent condition \< Independent condition, there is a 97% probability that there is a difference. FOr dependent vs. dependent_source, there's an 87% probability that dependnent \> dependent_source. So even though they're small differences, and the 95% credible interval are not showing completely reliable differences, there is still some evidence to suggest differences, especially in the independent comparison-- it just depends on how conservative you want to be. The plot show this more clearly.
+
+```{r}
+#| eval: false
+param_contrasts_long %>%
+  filter(parameter != "increase") %>% # remove increase parameter because it is basically the same as asymptote
+ggplot(aes(x = value, colour = consensus, fill = consensus)) +
+  stat_halfeye(alpha = 0.6, slab_linewidth = 0.5, slab_color = "black",  normalize = "xy", .width = .95) +
+  #facet_wrap(condition_effect_name~parameter, scales = "free_x")+
+  facet_grid(comparison ~ parameter, scales = "free") +
+  theme_minimal() +
+  labs(
+    title = "Posterior Distributions by Consensus Type and Experiment",
+   # subtitle = paste0("Experiment ", experiment),
+    x = "Estimate",
+    y = NULL,
+    fill = "Consensus",
+    color = "Consensus"
+  )
+```
+
+Above, the plot shows that there are much more reliable differences between the independent and dependent asymptote compared to the dependent vs. dependent source. Something that could be messing the asymptote reliability up a bit though is the difference in the starting points. For some reason, the samples in the dependent source group had a lower starting point in the baseline condition, which is a bit strange, but could be suppressing the influence of asymptote.
+
+One thing that I've done is just look at the probability that a a paramter in one condition is greater than that of the other condition by looking at the proportion of samples where the difference between conditions was greater than 0. Looking at this, it seems like much stronger evidence for asymptote differences across conditions, with 97% probability that asymptote in the independent condition is greater than that in dependent, and 88% probability that asymptote in the dependent condition is greater than that in the dependent source condition. When we look at the same for rate, these probabilities are close to 50%, suggesting that any differences are most likely being driven by asymptote.
+
+# Supplementary Materials
+
+#### Models
+
+In this section, we show the precise formalization of the different models that we ran in our model comparison, as they were implemented in BRMS. Note that in our models, all parameters were exponentiated so that they are constrained to be positive. Full model code can be found at \[link to model code\].
+
+All models assumed a power function relationship between consensus size and confidence, as follows:
+
+```         
+  confidence ~ (exp(start) + exp(increase)) - exp(increase) * (n_sources^(-exp(rate)))
+```
+
+What changed between models was how the fixed effects were defined. In other words, does the model assume the parameters vary as a function consensus condition?
+
+##### *None* model: assumes neither *start, increase,* nor *rate* vary as a function of consensus
+
+```         
+      start ~ 1,
+      increase ~ 1, 
+      rate ~ 1, 
+```
+
+##### *Start* model: assumes that only the *start* parameter varies as a function of consensus.
+
+```         
+ start ~ 1 + consensus
+ increase ~ 1
+  rate ~ 1
+```
+
+##### *Increase* model: assumes that only the *increase* parameter varies as a function of consensus.
+
+```         
+start ~ 1
+increase ~ 1 + consensus
+rate ~ 1
+```
+
+##### *Rate* model: assumes that only the *rate* parameter varies as a function of consensus.
+
+```         
+start ~ 1
+increase ~ 1
+rate ~ 1 + consensus
+```
+
+##### *Start + Increase* model: assumes that both the *start* and *increase* parameters vary as a function of consensus.
+
+```         
+start ~ 1 + consensus
+increase ~ 1 + consensus
+rate ~ 1
+```
+
+##### *Start + Rate* model: assumes that both the *start* and *rate* parameters vary as a function of consensus.
+
+```         
+start ~ 1 + consensus
+increase ~ 1
+rate ~ 1 + consensus
+```
+
+##### *Increase + Rate* model: assumes that both the *increase* and *rate* parameters vary as a function of consensus.
+
+```         
+start ~ 1
+increase ~ 1 + consensus
+rate ~ 1 + consensus
+```
+
+##### *Full* model: assuming *start, increase,* and *rate* all vary as a function of consensus condition.
+
+```         
+      start ~ 1 + consensus,
+      increase ~ 1 + consensus,
+      rate ~ 1 + consensus
+```
+
+##### 
+
+#### Priors
+
+We placed weakly informative priors on all parameters. Intercepts were given log-normal priors reflecting plausible baseline values, while consensus effects (slopes) were centered at zero with moderate variance:
+
+-   **Start (intercept):**\
+    \[ \text{start}\_{\text{Intercept}} \sim \mathcal{N}(\log 75,, 0.5\^2) \]
+
+-   **Increase (intercept):**\
+    \[ \text{increase}\_{\text{Intercept}} \sim \mathcal{N}(\log 25,, 0.5\^2) \]
+
+-   **Rate (intercept):**\
+    \[ \text{rate}\_{\text{Intercept}} \sim \mathcal{N}(\log 0.5,, 0.2\^2) \]
+
+-   **Consensus effects (when included):**\
+    \[ \text{start}*{*\text{consensus=independent}} \sim \mathcal{N}(0,, 0.5\^2), \quad \text{increase}{\text{consensus=independent}} \sim \mathcal{N}(0,, 0.5\^2), \quad \text{rate}\_{\text{consensus=independent}} \sim \mathcal{N}(0,, 0.5\^2) \]

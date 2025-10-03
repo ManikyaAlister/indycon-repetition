@@ -18,13 +18,18 @@ for (i in 1:length(experiments)) {
   experiment <- experiments[i]
   
   # load model comparison data 
-  load(here(paste0("output/looic-model-comparison-e",experiment,".Rdata")))
+  load(here(paste0("analyses/output/looic-model-comparison-e",experiment,".Rdata")))
   
-  # convert to data frame for weights
-  d_model_looic <- as.data.frame(t(model_looic))
+  d_model_looic <- model_looic %>%
+    select(LOOIC)
+  
+  # convert to to data frame with named column  for weights
+  d_model_looic_formatted <- as.data.frame(t(d_model_looic))
+  colnames(d_model_looic_formatted) <- model_looic$model
+
   
   # convert LOOIC to weights
-  weighted_LOOIC <- weightedICs(d_model_looic, bySubject = FALSE)
+  weighted_LOOIC <- weightedICs( d_model_looic_formatted, bySubject = FALSE)
   
   d_weighted_looic <- as.data.frame(weighted_LOOIC) %>%
     rename(Weight = weighted_LOOIC)
@@ -109,7 +114,7 @@ ggarrange(plotlist = weighted_stacked_plot_list, common.legend = TRUE, nrow = 1)
 
 combined_weighted_group_plot <- ggarrange(plotlist = weighted_group_plot_list, common.legend = TRUE, nrow = 1, legend = "none")
 
-save()
+save(combined_weighted_group_plot, file = here(paste0("analyses/output/combined-weighted-group-plot-exp-",experiments_string,".Rdata")))
 ggsave(filename = here(paste0("analyses/plots/combined-weighted-group-plot-exp-",experiments_string,".png")), width = 9, height = 5)
 
 ggarrange(plotlist = weighted_group_stacked_plot_list, common.legend = TRUE, nrow = 1)

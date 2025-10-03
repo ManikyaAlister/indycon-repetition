@@ -5,7 +5,7 @@ library(tidyverse)
 library(brms)
 
 experiment = 2
-model_names <- c("rate",  "increase", "start", "start_increase", "start_rate","rate_increase", "none")# "re_claim", full_hierarchical")#,
+model_names <- "none" #c("rate",  "increase", "start", "start_increase", "start_rate","rate_increase", "none")# "re_claim", full_hierarchical")#,
 for(j in 1:length(model_names)){
   model_name <- model_names[j]
   models <- list(
@@ -189,7 +189,7 @@ for(j in 1:length(model_names)){
   }
   
   fit <- fitHierModel(d_modelling, power, power_priors, experiment, "Power")
-  save(fit, file = here(paste0("output/fe-brms-exp",experiment,"-power-fit-",model_name,".Rdata")))
+  save(fit, file = here(paste0("analyses/output/fe-brms-exp",experiment,"-power-fit-",model_name,".Rdata")))
 }
 
 

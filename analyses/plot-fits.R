@@ -1,9 +1,9 @@
 library(tidyverse)
 library(here)
-
-exp <- 3
-model <- "increase"
-version <- "power"
+# 
+# exp <- 3
+# model <- "increase"
+# version <- "power"
 
 plotFit <- function(exp,
                     model = "full",
@@ -16,7 +16,7 @@ plotFit <- function(exp,
   # load model fit
   load(here(
     paste0(
-      "output/fe-brms-exp",
+      "analyses/output/fe-brms-exp",
       exp,
       "-",
       version,
@@ -114,7 +114,7 @@ plotFit <- function(exp,
   ggsave(
     plot = plot,
     filename = here(
-      paste0("plots/fe-brms-", version, "-", model, "-fit-E", exp, ".jpg")
+      paste0("analyses/plots/fe-brms-", version, "-", model, "-fit-E", exp, ".jpg")
     ),
     width = 9,
     height = 5

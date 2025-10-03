@@ -44,7 +44,7 @@ A relevant question for relevant for our modelling approach is how to deal with 
 1.  There is only one trial per participant, so you cannot control for individual variation in priors in the same way as you normally would (i.e., with a random intercept).
 2.  As I will show, the prior and baseline condition are *highly* correlated, meaning that controlling for controlling for prior belief as a fixed effect could be problematic, and artificlally reduce the predictive power of the model and result in issues of multicollinearity.
 
-## Does confidence change from prior to baseline? 
+## Does confidence change from prior to baseline?
 
 If we can treat prior and baseline as essentially the same, this will vastly simplify our modelling, as we can treat the baseline condition as people's priors. First, let's check the correlation
 
@@ -123,7 +123,6 @@ model_looic
 The results suggest that only allowing the increase (asymptote) parameter to vary across time results in the best model performance relative to complexity. It's worth noting though, that the difference between all of the models that assume at least one parameter varies across consensus conditions is quite small (i.e., all models except "none" are separated by only a few points). This fairly large difference between full vs. none suggests so me that there is pretty strong differences across consensus conditions, but this could be mainly driven by the independent condition being quite different from the dependent and dependent source conditions.
 
 Overall, between the model comparison and the parameter estimates I'd interpret this as there being some evidence there is a) differences between conditions and that b) these difference are driven by asymptote. asymptote between con between independent and the rest, and some evidence to suggest differences beteween dependent and dependent_source, but they're smaller and less reliable.
-
 
 # Compare parameters across conditions
 
