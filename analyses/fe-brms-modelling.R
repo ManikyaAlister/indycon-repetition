@@ -4,8 +4,9 @@ library(ggpubr)
 library(tidyverse)
 library(brms)
 
-experiment = 2
-model_names <- "none" #c("rate",  "increase", "start", "start_increase", "start_rate","rate_increase", "none")# "re_claim", full_hierarchical")#,
+experiment = 1
+rm_cond <- FALSE # set to FALSE if don't want to remove any conditions
+model_names <- c("full", "rate",  "increase", "start", "start_increase", "start_rate","rate_increase", "none")# "re_claim", full_hierarchical")#,
 for(j in 1:length(model_names)){
   model_name <- model_names[j]
   models <- list(
@@ -110,7 +111,7 @@ for(j in 1:length(model_names)){
     # Start with intercept priors
     priors <- c(
       make_prior("increase", "Intercept", log(25), 0.5),
-      make_prior("start",    "Intercept", log(75), 0.5),
+      make_prior("start",    "Intercept", log(50), 0.5),
       make_prior("rate",     "Intercept", log(0.5), 0.2)
     )
     
@@ -166,6 +167,11 @@ for(j in 1:length(model_names)){
         ))
   }
   
+  if(is.character(rm_cond)){
+    d_modelling <- d_modelling %>%
+      filter(consensus != rm_cond)
+  }
+  
   save(d_modelling, file = here(paste0(
     "data/experiment-",experiment,"/clean/d-modelling.Rdata"
   )))
@@ -189,7 +195,14 @@ for(j in 1:length(model_names)){
   }
   
   fit <- fitHierModel(d_modelling, power, power_priors, experiment, "Power")
-  save(fit, file = here(paste0("analyses/output/fe-brms-exp",experiment,"-power-fit-",model_name,".Rdata")))
+  
+  file <- paste0("analyses/output/fe-brms-exp",experiment,"-power-fit-",model_name)
+  
+  if(is.character(rm_cond)){
+    file <- paste0(file,"-rm-",rm_cond)
+  }
+  
+  save(fit, file = here(paste0(file,".Rdata")))
 }
 
 

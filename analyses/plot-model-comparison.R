@@ -36,6 +36,8 @@ for (i in 1:length(experiments)) {
   
   d_weighted_looic$Model = factor(names(weighted_LOOIC), levels = models)
   
+  save(d_weighted_looic, file = here(paste0("analyses/output/weighted-looic-model-comparison-e",experiment,".Rdata")))
+  
   plotWeights = function(d_weights, experiment, stacked = FALSE){
     
     plot <- d_weights %>%
