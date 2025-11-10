@@ -225,8 +225,11 @@ As per Figure X, the model provides a good fit for all three consensus independe
 
 ```{r}
 plotFit(exp = 3,
-        title = "Experiment 2",
-        subtitle = NULL)
+        title = "Experiment 3",
+        subtitle = NULL,
+        model = "full")
+
+ggsave(file = here("plots/e3-full-model-fit.png"), width = 7, height = 5)
 ```
 
 #### Model Comparison
@@ -245,7 +248,7 @@ modelComparisonTable(model_looic, model_full_names)
 #| label: tbl-params-e3
 #| tbl-cap: "Parameter estimates of the best performing model in Experument 3: the *Increase* model, in which the Increase parameter is the only parameter that can vary across consensus independence conditions. This change across conditions is operationalised by estimating Increase for the baseline condition (the *Dependent* condition), then estimating the *change* in that paremter in the independent condition. "
 
-load(here("analyses/output/fe-brms-exp3-power-fit-increase.Rdata"))
+load(here("analyses/output/fe-brms-exp3-power-fit-re_claim_increase.Rdata"))
 param_names <- c("Start",
                 "Increase_{Dependent}",
                  "Increase_{Dependent Source}",
@@ -275,7 +278,6 @@ modelComparisonTable(model_looic_rm_dependent_source, model_full_names)
 load(here("analyses/output/looic-model-comparison-e3-rm-independent.Rdata"))
 modelComparisonTable(model_looic_rm_independent, model_full_names)
 ```
-
 
 # References
 
@@ -347,9 +349,10 @@ Taken together, I would argue that it's safe to ignore prior beliefs in the mode
 
 ### Weighted Model Comparison
 
-The model comparisons in the paper are interpreted using raw LOOIC values. However, many people might find it difficult to compare the scale of  relative performance for each model. In othwe words, it's unclear how big a difference of, for example, 1 LOOIC is. An alternative to this is to convert the raw LOOIC into relative model weights. This therefore represents performance as a kind of "relative probability" of one model compared to the other. We could consider adding these weights to the model comparison tables. 
+The model comparisons in the paper are interpreted using raw LOOIC values. However, many people might find it difficult to compare the scale of relative performance for each model. In othwe words, it's unclear how big a difference of, for example, 1 LOOIC is. An alternative to this is to convert the raw LOOIC into relative model weights. This therefore represents performance as a kind of "relative probability" of one model compared to the other. We could consider adding these weights to the model comparison tables.
 
-Model weights experiment 1: 
+Model weights experiment 1:
+
 ```{r}
 load(here("analyses/output/weighted-looic-model-comparison-e1.Rdata"))
 weightTable = function(d_weighted_looic){
@@ -360,25 +363,28 @@ autofit(flextable(weight_table))
 }
 weightTable(d_weighted_looic)
 ```
-Model weights experiment 2: 
+
+Model weights experiment 2:
+
 ```{r}
 load(here("analyses/output/weighted-looic-model-comparison-e2.Rdata"))
 weightTable(d_weighted_looic)
 ```
-Model weights experiment 3: 
+
+Model weights experiment 3:
+
 ```{r}
 load(here("analyses/output/weighted-looic-model-comparison-e3.Rdata"))
 weightTable(d_weighted_looic)
 
 ```
 
-Something else that we can do with these weights is create model groupings. So we can combine all of the models that assume *Increase* changes across conditions (Increase, Increase+start, Increase+rate, Full), and compare that to models that allow other parameters to change across conditions. This can give us a measure of the relative imporatance of each parameter: 
+Something else that we can do with these weights is create model groupings. So we can combine all of the models that assume *Increase* changes across conditions (Increase, Increase+start, Increase+rate, Full), and compare that to models that allow other parameters to change across conditions. This can give us a measure of the relative imporatance of each parameter:
 
 ```{r}
 load(here("analyses/output/combined-weighted-group-plot-exp-1-2-3.Rdata"))
 combined_weighted_group_plot
 ```
-
 
 ## Models
 
@@ -466,8 +472,7 @@ We placed weakly informative priors on all parameters. Intercepts were given log
 
 $$
  Start \sim \mathcal{N}(\log 50, 0.5) 
-$$
-$$
+$$ $$
   Increase \sim \mathcal{N}(\log 25, 0.5) 
 $$
 
