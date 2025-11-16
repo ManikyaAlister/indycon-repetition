@@ -82,6 +82,16 @@ plotFit(exp = "1-combined",
         model = "full")
 ```
 
+We can also separate by valence, as shown in Figure X. Because the model is averaging over valence, it the fits look worse when faceting across them, but importantly the trajectories of both valence levels look similar.
+
+```{r}
+plotFit(exp = "1-combined",
+        title = "Experiment 1",
+        subtitle = NULL,
+        model = "full",
+        by_group = "valence")
+```
+
 #### Model Comparison
 
 In Figure X, our modelling suggests that there is a clear distinction between the trajectories of the independent and dependent consensus conditions respectively. However, it is not clear what is driving these differences. Specifically, it is unclear whether independence results in *faster* growth in confidence (i.e., is driven by the *rate* parameter), results in higher maximum increases in confidence (i.e., is driven by the *increase* parameter) or is driven by both mechanisms.
@@ -142,17 +152,6 @@ modelComparisonTable <- function(model_looic, model_full_names) {
 }
 
 modelComparisonTable(model_looic, model_full_names)
-```
-
-```{r}
-loo_compare <- model_looic[[1]]
-compare_names <- rownames(loo_compare)
-loo_compare_df <- round(as.data.frame(loo_compare),2) %>%
-  mutate(model = compare_names,
-         looic = as.character(looic)) %>%
-  select(model, elpd_diff, se_diff, looic, se_looic)
-
-autofit(flextable(loo_compare_df))
 ```
 
 @tbl-params-e1 shows the parameter estimates of the best performing model (the Rate + Increase model), and the 95% credible intervals of those estimates. The estimates predicted that confidence grows from approximately 52.62 at baseline (Start), reaching a maximum (asymptote) confidence of 74.73 for the dependent consensus (52.62 + 22.11) and 82.64 for the independent consensus (52.62 + 30.02). As mentioned earlier, this highlights a benefit of our modelling approach, since the maximum estimated confidence values (the point at which confidence will no longer increase as a function of the consensus size, calculated as Start + Increase) was outside of the observed measured confidence (see Figure X). The differences in Increase across conditions appeared to be statistically reliable, with no overlap between the upper 95% credible interval of Increase\_{Dependent} and the Increase\_{Independent} estimate, and no overlap between the lower 95% credible interval for Increase\_{Independent} and the Increase\_{Dependent} estimate.The Rate parameter, which governs how quickly confidence approaches its asymptote, showed similar estimates across conditions, with the median estimates of the Dependent and Independent conditions overlapping with the others' credible intervals, suggesting the rate of confidence accumulation was less statistically reliable.
@@ -224,8 +223,16 @@ plotFit(exp = 2,
         title = "Experiment 2",
         subtitle = NULL,
         model = "full")
+```
 
-ggsave(file = here("plots/e3-full-model-fit.png"), width = 7, height = 5)
+We can also look at how the overall model performs as a function of each claim type, as shown in Figure X. However it is important to note that the model *averages over claim type* so the fits will inevitably look worse when separating by claim type, since the model has no ability to account for those differences.
+
+```{r}
+plotFit(exp = 2,
+        title = "Experiment 2",
+        subtitle = NULL,
+        model = "full",
+        by_group = "claim")
 ```
 
 #### Model Comparison
