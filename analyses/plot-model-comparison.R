@@ -1,7 +1,8 @@
 library(modelProb)
 
 #define experiment(s)
-experiments = 1:3
+experiments = c("-1-combined", "2") #"2", "2")
+rm_conds = list(NULL,NULL)#, "dependent_source", "independent")
 
 # models in order of complexity 
 models <- c("full", "rate_increase", "start_increase", "start_rate", "increase", "rate", "start", "none")
@@ -16,16 +17,20 @@ weighted_group_stacked_plot_list <- NULL
 
 for (i in 1:length(experiments)) {
   experiment <- experiments[i]
-  
+  rm_cond <- rm_conds[[i]]
+  if (!is.null(rm_cond)) {
+    rm_cond <- paste0("-rm-",rm_conds[i])
+  }
+
   # load model comparison data 
-  load(here(paste0("analyses/output/looic-model-comparison-e",experiment,".Rdata")))
+  load(here(paste0("analyses/output/looic-model-comparison-e",experiment,"",rm_cond,".Rdata")))
   
-  d_model_looic <- model_looic %>%
+  d_model_looic <- model_looic[[2]] %>%
     select(LOOIC)
   
   # convert to to data frame with named column  for weights
   d_model_looic_formatted <- as.data.frame(t(d_model_looic))
-  colnames(d_model_looic_formatted) <- model_looic$model
+  colnames(d_model_looic_formatted) <- model_looic[[2]]$model
 
   
   # convert LOOIC to weights
@@ -34,7 +39,7 @@ for (i in 1:length(experiments)) {
   d_weighted_looic <- as.data.frame(weighted_LOOIC) %>%
     rename(Weight = weighted_LOOIC)
   
-  d_weighted_looic$Model = factor(names(weighted_LOOIC), levels = models)
+  d_weighted_looic$Model = factor(rownames(d_weighted_looic), levels = models)
   
   save(d_weighted_looic, file = here(paste0("analyses/output/weighted-looic-model-comparison-e",experiment,".Rdata")))
   

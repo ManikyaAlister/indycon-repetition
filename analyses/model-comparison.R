@@ -1,4 +1,9 @@
-experiment = 1
+library(here)
+library(tidyverse)
+library(brms)
+
+experiment = 2#"-1-combined"
+re = FALSE #re_valence
 
 model <- c(
   "none",
@@ -9,37 +14,66 @@ model <- c(
   "start_rate",
   "rate_increase",
   "full"
+  #"re_claim"
 )
+
+output_dir <- paste0("analyses/output/looic-model-comparison-e",experiment)
+
+
+if (is.character(re)){
+  model <-  paste0(re,"_", model)  # random effect on claim for experiment 3
+  output_dir <- paste0(output_dir, "-",re)
+}
 
 
 getLoo = function(models, experiment, rm_cond = FALSE){
+  
+  loo_list <- list()
   model_comparison <- expand_grid(experiment, model) %>%
     mutate(LOOIC = NA, 
            SE = NA)
   
   for (i in 1:length(models)){
     model <- models[i]
+    print(paste0("Model: ", model))
     load_script <- paste0("analyses/output/fe-brms-exp",experiment,"-power-fit-",model)
     if(is.character(rm_cond)){
       load_script <- paste0(load_script, "-rm-",rm_cond)
     }
     load(here(paste0(load_script,".Rdata")))
-    looic = loo(fit)
+    looic <- loo(fit)
+    loo_list[[model]] <- looic
     model_comparison[model_comparison[,"model"] == model ,"LOOIC"] <- looic$estimates["looic","Estimate"]
     model_comparison[model_comparison[,"model"] == model ,"SE"] <-looic$estimates["looic","SE"]
   }
-  model_comparison
+  
+  formal_loo_comparison <- loo_compare(loo_list)
+  
+  list(
+    formal_loo_comparison,
+    model_comparison,
+    loo_list
+  )
+  
 }
+
   
 model_looic <- getLoo(models = model, experiment = experiment)
-save(model_looic, file = here(paste0("analyses/output/looic-model-comparison-e",experiment,".Rdata")))
 
-if (experiment == 3) {
+save(model_looic, file = here(paste0(output_dir,".Rdata")))
+
+if (experiment == 2) {
+  rm_dep_fil <- "looic"
+  
   model_looic_rm_independent <- getLoo(models = model, experiment = experiment, rm_cond = "independent")
-  save(model_looic_rm_independent, file = here(paste0("analyses/output/looic-model-comparison-e",experiment,"-rm-independent.Rdata")))
+  
+  path_rm_ind <- paste0(output_dir,"-rm-independent")
+  save(model_looic_rm_independent, file = here(paste0(path_rm_ind,".rdata")))
   
   model_looic_rm_dependent_source<- getLoo(models = model, experiment = experiment, rm_cond = "dependent_source")
-  save(model_looic_rm_dependent_source, file = here(paste0("analyses/output/looic-model-comparison-e",experiment,"-rm-dependent_source.Rdata")))
+  
+  path_rm_dep <- paste0(output_dir,"-rm-dependent_source")
+  save(model_looic_rm_dependent_source, file = here(paste0(path_rm_dep,".rdata")))
 }
 
 
