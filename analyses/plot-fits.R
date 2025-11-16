@@ -16,7 +16,7 @@ plotFit <- function(exp,
   # load model fit
   load(here(
     paste0(
-      "analyses/output/fe-brms-exp",
+      "analyses/output/fe-brms-exp-",
       exp,
       "-",
       version,
@@ -27,17 +27,18 @@ plotFit <- function(exp,
   ))
   
   
+  
   # load and combine empirical data
   load(here(
     paste0("data/experiment-", exp, "/clean/d-modelling.Rdata")
   ))
   
   # define levels
-  if (exp %in% 1:2) {
+  if (exp == 1 | exp == "1-combined") {
     consensus_levels <- c("dependent", "independent")
     consensus_labels <- c("Dependent", "Independent")
     
-  } else if (exp == 3) {
+  } else if (exp == 2) {
     consensus_levels <- c("dependent", "dependent_source", "independent") # E3 has extra condition
     consensus_labels <- c("Dependent", "Dependent Source", "Independent")
     

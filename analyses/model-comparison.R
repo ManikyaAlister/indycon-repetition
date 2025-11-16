@@ -1,5 +1,9 @@
-experiment = 2
-re_claim = FALSE
+library(here)
+library(tidyverse)
+library(brms)
+
+experiment = 2#"-1-combined"
+re = FALSE #re_valence
 
 model <- c(
   "none",
@@ -16,10 +20,9 @@ model <- c(
 output_dir <- paste0("analyses/output/looic-model-comparison-e",experiment)
 
 
-if (re_claim){
-  model <-  paste0("re_claim_", model)  # random effect on claim for experiment 3
-  output_dir <- paste0(output_dir, "-re_claim")
-  
+if (is.character(re)){
+  model <-  paste0(re,"_", model)  # random effect on claim for experiment 3
+  output_dir <- paste0(output_dir, "-",re)
 }
 
 
@@ -48,7 +51,8 @@ getLoo = function(models, experiment, rm_cond = FALSE){
   
   list(
     formal_loo_comparison,
-    model_comparison
+    model_comparison,
+    loo_list
   )
   
 }
@@ -58,7 +62,7 @@ model_looic <- getLoo(models = model, experiment = experiment)
 
 save(model_looic, file = here(paste0(output_dir,".Rdata")))
 
-if (experiment == 3) {
+if (experiment == 2) {
   rm_dep_fil <- "looic"
   
   model_looic_rm_independent <- getLoo(models = model, experiment = experiment, rm_cond = "independent")
