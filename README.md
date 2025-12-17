@@ -2,6 +2,8 @@
 
 This repository contains the data and analysis code for modelling how increasing numbers of sources affect participants' confidence (non-linear, Bayesian power-function models).
 
+Note that due to the size of the output files, the analyses/output folder is empty, but this repository  should contain all of the code necessary to reproduce the output. 
+
 **Key files**
 - **evaluate-brms-modelling.qmd**: Project report and figures using the brms fits; reproduces main analyses and narratives in the manuscript.
 - **analyses/**: Analysis scripts and utilities.
