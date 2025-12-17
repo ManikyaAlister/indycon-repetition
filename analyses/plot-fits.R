@@ -112,7 +112,7 @@ plotFit <- function(exp,
                   aes(ymin = mean - se, ymax = mean + se)) +
     labs(
       x = "Consensus Proportion",
-      y = "Confidence",
+      y = "Claim Endorsement",
       title = title,
       subtitle = subtitle,
       color = "Consensus",
@@ -122,6 +122,8 @@ plotFit <- function(exp,
     scale_colour_viridis_d(option = "D") +
     scale_x_continuous(breaks = seq(0, 9, 3),
                        labels = c("1:1", "4:1", "7:1", "10:1")) +
+    scale_y_continuous(breaks = seq(45,54,5))+
+    lims(y = c(45,75))+
     theme_minimal(base_size = 12) +
     theme(legend.position = "bottom")
   
