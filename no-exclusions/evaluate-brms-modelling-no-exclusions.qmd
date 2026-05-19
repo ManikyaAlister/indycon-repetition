@@ -1,0 +1,266 @@
+---
+title: "Modelling the impact of increasing sources using Bayesian, non-linear (power function) regressions"
+author: "Manikya Alister"
+format: 
+  # html:
+  #  embed-resources: true
+  docx:
+    reference-doc: apa-7-template.docx
+editor: visual
+message: false
+warning: false
+code-fold: true
+prefer-html: true # so that rendering doesn't break for non-html when using html commands
+toc: true
+echo: false
+---
+
+```{r}
+library(tidyverse)
+library(posterior)
+library(here)
+library(ggdist)
+library(raincloudplots) 
+library(knitr)
+library(ggpubr)
+library(brms)
+#library(gtsummary)
+library(flextable)
+
+```
+
+In this document we rerun the same analyses in `evaluate-brms-modelling.qmd` but without excluding any participants. Look at the original document for more details about the analyses. 
+
+# Experiment 1
+
+## Results
+
+### Non-linear Bayesian Modelling
+
+
+#### Model Fit
+
+```{r}
+source(here("analyses/plot-fits.R")) # source function that plots the model fit 
+
+plotFit(exp = "1-combined",
+        title = "Experiment 1",
+        subtitle = NULL,
+        model = "full",
+        no_exclusions = "-no-exclusions")
+```
+
+
+```{r}
+plotFit(exp = "1-combined",
+        title = "Experiment 1",
+        subtitle = NULL,
+        model = "full",
+        by_group = "posneg",
+        no_exclusions = "-no-exclusions")
+```
+
+#### Model Comparison
+
+```{r}
+#| label: tbl-m-comp-e1
+#| tbl-cap: "Model comparison statistics for Experiment 1. Models are ranked by Leave-One-Out Information Criterion (LOOIC), with lower values indicating better predictive performance. SE = standard error of LOOIC. ΔELPD = difference in expected log pointwise predictive density from the best-fitting model, with values closer to zero indicating similar performance. SE(ΔELPD) = standard error of the difference in ELPD. Weight = relative probability of each model relative to the other models, caluclated using pseudo Bayesian model avereging. Models varying only the rate and increase parameters by consensus showed the best predictive performance. "
+
+load(here("analyses/output/looic-model-comparison-e1-combined.Rdata"))
+load(here("analyses/output/weighted-looic-model-comparison-e1-combined.Rdata"))
+model_full_names <- c(
+  "none" = "Null",
+  "rate" = "Rate",
+  "increase" = "Increase",
+  "start" = "Start",
+  "start_increase" = "Start + Increase",
+  "start_rate"  ="Start + Rate",
+  "rate_increase" = "Rate + Increase",
+  "full"="Full Model"
+)
+
+modelComparisonTable <- function(model_looic, model_full_names) {
+  raw_looic <- model_looic[[2]]
+  weights <- loo_model_weights(model_looic[[3]],method = "pseudobma")
+  formal_compare <- model_looic[[1]]
+  
+  # Convert loo_compare output to data frame with model names
+  # loo_compare orders models from best (top) to worst (bottom)
+  formal_compare_df <- as.data.frame(formal_compare)
+  formal_compare_df$model <- rownames(formal_compare_df)
+  
+  # Join everything together
+  model_comparison <- raw_looic %>%
+    left_join(
+      formal_compare_df %>% 
+        select(model, elpd_diff, se_diff),
+      by = "model"
+    ) %>%
+    mutate(
+      Rank = rank(LOOIC),
+      LOOIC = as.character(round(LOOIC, 2)),
+      SE = round(SE, 2),
+      Model = model_full_names[model],
+      Weight = round(as.numeric(weights[model]),2),
+      `ΔELPD` = round(elpd_diff, 2),
+      `SE(ΔELPD)` = round(se_diff, 2)
+    ) %>%
+    arrange(Rank) %>%  # Sort from best to worst
+    select(Model, Rank, LOOIC, SE, `ΔELPD`, `SE(ΔELPD)`, Weight)
+  
+  flextable::autofit(flextable::flextable(model_comparison))
+}
+
+modelComparisonTable(model_looic, model_full_names)
+```
+
+```{r}
+#| label: tbl-params-e1
+#| tbl-cap: "Parameter estimates of the best performing model in Experument 1: the *Increase* model, in which the Increase parameter is the only parameter that can vary across consensus independence conditions. This change across conditions is operationalised by estimating Increase for the baseline condition (the *Dependent* condition), then estimating the *change* in that paremter in the independent condition. "
+
+load(here("analyses/output/fe-brms-exp-1-combined-power-fit-rate_increase.Rdata"))
+param_names <- c("Start",
+                 "Increase_{Dependent}",
+                 "Increase_{Independent}",
+                 "Rate_{Dependent}",
+                 "Rate_{Independent}")
+
+
+extractEstimates = function(fit, param_names) {
+  summ_fit <- summary(fit)
+  estimates <- summ_fit$fixed 
+  
+  exp_estimates <- round(exp(estimates),2)
+
+  backup_estimates <- summ_fit$fixed # preserve unnexponentiated estimates for calculating the condition effect 
+  
+  params <- rownames(estimates)
+  effect_rows <- grepl("consensus", params)
+  effect_params <- params[effect_rows]
+  #baseline_intercept <- paste0(target_param, "_Intercept")
+  for (i in 1:length(effect_params)) {
+    param <- effect_params[i]
+    base_param <- sub("_.*", "",param)
+    baseline_intercept <- paste0(base_param,"_Intercept")
+    # adjust the estimate so it is on original scale and reflects independence effect
+    exp_estimates[param, "Estimate"] <- exp(estimates[param, "Estimate"] + estimates[baseline_intercept, "Estimate"])
+    exp_estimates[param, "l-95% CI"] <- exp(estimates[param, "Estimate"] + estimates[baseline_intercept, "l-95% CI"])
+    exp_estimates[param, "u-95% CI"] <- exp(estimates[param, "Estimate"] + estimates[baseline_intercept, "u-95% CI"])
+  }
+  
+  exp_estimates <- round(exp_estimates,2)
+  
+  clean_estimates <- exp_estimates %>%
+    mutate(Parameters = param_names) %>%
+    select(-Rhat, -Bulk_ESS, -Tail_ESS, -Est.Error)  %>%
+    relocate(Parameters) %>%
+    remove_rownames() 
+  
+  autofit(flextable(clean_estimates))
+  
+}
+
+extractEstimates(fit, param_names)
+
+```
+
+# Experiment 2
+
+## Results
+
+### Non-linear Bayesian Modelling
+
+#### Model Fit
+
+As per Figure X, the model provides a good fit for all three consensus independence conditions.
+
+```{r}
+plotFit(exp = 2,
+        title = "Experiment 2",
+        subtitle = NULL,
+        model = "full",
+        no_exclusions = "-no-exclusions")
+```
+
+```{r}
+plotFit(exp = "2",
+        title = "Experiment 2",
+        subtitle = NULL,
+        model = "full",
+        by_group = "claim",
+        no_exclusions = "-no-exclusions")
+```
+
+#### Model Comparison
+
+```{r}
+#| label: tbl-m-comp-e2
+#| tbl-cap: "Model comparison using LOOIC (lower LOOIC = better performance). "
+
+load(here("analyses/output/looic-model-comparison-e2.Rdata"))
+modelComparisonTable(model_looic, model_full_names)
+```
+
+```{r}
+#|include: FALSE
+#| label: tbl-params-e2
+#| tbl-cap: "Parameter estimates of the best performing model in Experument 2: the *Increase* model, in which the Increase parameter is the only parameter that can vary across consensus independence conditions. This change across conditions is operationalised by estimating Increase for the baseline condition (the *Dependent* condition), then estimating the *change* in that paremter in the independent condition. "
+
+load(here("analyses/output/fe-brms-exp-2-power-fit-increase.Rdata"))
+param_names <- c("Start",
+                "Increase_{Dependent}",
+                 "Increase_{Dependent Source}",
+                 "Increase_{Independent}",
+                 "Rate")
+extractEstimates(fit, param_names) # PROBLEM: Exp is obscuring legit negative fixed effects. 
+# Also, should I be exponentiating the errors??? 
+# Soome follow up on Exp 3 might be important so that we know if increase is best for ALL conditions 
+```
+
+
+
+```{r}
+#| label: tbl-m-comp-e3-rm-dep-source
+#| tbl-cap: "Experiment 2 Model comparison using LOOIC (lower LOOIC = better performance), comparing Independent vs. Dependent (excluding Dependent Source)"
+load(here("analyses/output/looic-model-comparison-e2-rm-dependent_source-no-exclusions.Rdata"))
+modelComparisonTable(model_looic_rm_dependent_source, model_full_names)
+```
+
+
+```{r}
+#| label: tbl-params-e2-rm-dep-source
+#| tbl-cap: "Parameter estimates of the best performing model in Experument 2 comparing Independent vs. Dependent Consensys: the *Increase* model, in which the Increase parameter is the only parameter that can vary across consensus independence conditions."
+
+load(here("analyses/output/fe-brms-exp-2-power-fit-increase-rm-dependent_source-no-exclusions.Rdata"))
+param_names <- c("Start",
+                "Increase_{Dependent}",
+
+                                 "Increase_{Independent}",
+                 "Rate")
+extractEstimates(fit, param_names)
+```
+
+
+
+```{r}
+#| label: tbl-m-comp-e3-rm-ind
+#| tbl-cap: "Experiment 2 Model comparison using LOOIC (lower LOOIC = better performance), comparing Dependent vs. Dependent Source (excluding Independent)"
+load(here("analyses/output/looic-model-comparison-e2-rm-independent-no-exclusions.Rdata"))
+modelComparisonTable(model_looic_rm_independent, model_full_names)
+```
+
+```{r}
+#| label: tbl-params-e2-rm-ind
+#| tbl-cap: "Parameter estimates of the best performing model in Experiment 2 comparing Dependent vs. Dependent Source: the *Start* model, in which the Start parameter is the only parameter that can vary across consensus conditions."
+
+load(here("analyses/output/fe-brms-exp-2-power-fit-start-rm-independent-no-exclusions.Rdata"))
+param_names <- c(
+                "Start_{Dependent}",
+
+                "Start_{Dependent Source}",
+                "Increase",
+                 "Rate")
+extractEstimates(fit, param_names)
+```
+
+

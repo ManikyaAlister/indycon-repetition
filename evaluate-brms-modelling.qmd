@@ -89,7 +89,7 @@ plotFit(exp = "1-combined",
         title = "Experiment 1",
         subtitle = NULL,
         model = "full",
-        by_group = "valence")
+        by_group = "posneg")
 ```
 
 #### Model Comparison
@@ -106,8 +106,8 @@ It is worth pointing out however, that the difference between the best performin
 #| label: tbl-m-comp-e1
 #| tbl-cap: "Model comparison statistics for Experiment 1. Models are ranked by Leave-One-Out Information Criterion (LOOIC), with lower values indicating better predictive performance. SE = standard error of LOOIC. ΔELPD = difference in expected log pointwise predictive density from the best-fitting model, with values closer to zero indicating similar performance. SE(ΔELPD) = standard error of the difference in ELPD. Weight = relative probability of each model relative to the other models, caluclated using pseudo Bayesian model avereging. Models varying only the rate and increase parameters by consensus showed the best predictive performance. "
 
-load(here("analyses/output/looic-model-comparison-e-1-combined.Rdata"))
-load(here("analyses/output/weighted-looic-model-comparison-e-1-combined.Rdata"))
+load(here("analyses/output/looic-model-comparison-e1-combined.Rdata"))
+load(here("analyses/output/weighted-looic-model-comparison-e1-combined.Rdata"))
 model_full_names <- c(
   "none" = "Null",
   "rate" = "Rate",

@@ -4,21 +4,21 @@ library(ggpubr)
 library(tidyverse)
 library(brms)
 
-# aource models defined in models.R
+# source models defined in models.R
 source("analyses/models.R")
 
 # source priors 
 source("analyses/priors.R")
 
-experiment <- 2
-rm_cond <- "dependent_source" # set to FALSE if don't want to remove any conditions
-re_valence <- FALSE
-re_claim <- FALSE 
+experiment <- 2 #"1-combined"
+rm_cond <- "dependent_source" # set to FALSE if don't want to remove any conditions, otherwise for experiment 2 rm either "dependent_source" or "independent"
+exclude_ps <- FALSE # Run with exclusions (TRUE) or without (FALSE)
+re_valence <- FALSE # Run valence as a random effect (TRUE)
+re_claim <- FALSE  # Run claim as a random effect (TRUE)
 
-model_names <- c("full", "rate",  "increase", "start", "start_increase", "start_rate","rate_increase", "none") #, full_hierarchical")#,
+model_names <- c("full", "rate",  "increase", "start", "start_increase", "start_rate","rate_increase", "none")
  
 if (experiment == 2 & re_claim){
-  #re_claim <- TRUE 
   model_names <-  paste0("re_claim_", model_names)  # random effect on claim for experiment 3
 } else if (experiment == "1-combined" & re_valence) {
   model_names <- paste0("re_valence_", model_names) # random effect on valence for e1 combined
@@ -44,9 +44,18 @@ for(j in 1:length(model_names)){
       consensus = relevel(factor(consensus), ref = "dependent"),
     )
   
-  save(d_modelling, file = here(paste0(
-    "data/experiment-",experiment,"/clean/d-modelling.Rdata"
-  )))
+  file_d <- paste0(
+    "data/experiment-",experiment,"/clean/d-modelling"
+  )
+  
+  if (exclude_ps){
+  d_modelling <- d_modelling %>%
+    filter(final_inclusion == 1)
+  } else {
+    file_d <- paste0(file_d, "-no-exclusions")
+  }
+  
+  save(d_modelling, file = here(paste0(file_d,".Rdata")))
   
   if(is.character(rm_cond)){
     d_modelling <- d_modelling %>%
@@ -65,8 +74,8 @@ for(j in 1:length(model_names)){
       family = gaussian(),
       prior = prior,
       chains = 4,
-      cores = 4,
-      backend = "cmdstanr"  
+      cores = 4#,
+      #backend = "cmdstanr"  
     )
     
     fit
@@ -79,6 +88,10 @@ for(j in 1:length(model_names)){
   
   if(is.character(rm_cond)){
     file <- paste0(file,"-rm-",rm_cond)
+  }
+  
+  if (!exclude_ps) {
+   file <- paste0(file, "-no-exclusions") 
   }
   
   save(fit, file = here(paste0(file,".Rdata")))

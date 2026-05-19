@@ -6,7 +6,9 @@ plotFit <- function(exp,
                     version = "power",
                     title = "Confidence Growth by Consensus Type Across Experiments",
                     subtitle = "Modelled using a power function",
-                    by_group = NULL) { # specify column name to facet by (e.g., "valence", "claim")
+                    by_group = NULL, # specify column name to facet by (e.g., "valence", "claim")
+                    no_exclusions = NULL # either FALSE or "-no-exclusions"
+                    ) { 
   d_predictions <- NULL
   d_empirical_summ <- NULL
   
@@ -19,13 +21,14 @@ plotFit <- function(exp,
       version,
       "-fit-",
       model,
+      no_exclusions,
       ".Rdata"
     )
   ))
   
   # load and combine empirical data
   load(here(
-    paste0("data/experiment-", exp, "/clean/d-modelling.Rdata")
+    paste0("data/experiment-", exp, "/clean/d-modelling",no_exclusions,".Rdata")
   ))
   
   # define levels
@@ -127,7 +130,7 @@ plotFit <- function(exp,
     theme_minimal(base_size = 12) +
     theme(legend.position = "bottom")
   
-  path <- paste0("analyses/plots/fe-brms-", version, "-", model, "-fit-E", exp)
+  path <- paste0("analyses/plots/fe-brms-", version, "-", model, "-fit-E", exp,no_exclusions)
   
   if (!is.null(by_group)) {
     plot <- plot + facet_wrap(as.formula(paste("~", by_group)))#ncol = 1

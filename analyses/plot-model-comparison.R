@@ -1,7 +1,10 @@
 library(modelProb)
+library(here)
+library(tidyverse)
+library(ggpubr)
 
 #define experiment(s)
-experiments = c("-1-combined", "2") #"2", "2")
+experiments = c("1-combined", "2") #"2", "2")
 rm_conds = list(NULL,NULL)#, "dependent_source", "independent")
 
 # models in order of complexity 
