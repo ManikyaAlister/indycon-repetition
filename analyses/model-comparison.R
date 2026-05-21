@@ -2,7 +2,7 @@ library(here)
 library(tidyverse)
 library(brms)
 
-experiment = 2
+experiment = "1-combined"
 no_exclusions_str <- "-no-exclusions" # "-no-exclusions" or NULL 
 re = FALSE #re_valence # re = random effects model
 

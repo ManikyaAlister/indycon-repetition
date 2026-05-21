@@ -70,7 +70,7 @@ for(j in 1:length(model_names)){
     # Fit the model 
     fit <- brm(
       formula = form,
-      data = d_modelling,
+      data = data,
       family = gaussian(),
       prior = prior,
       chains = 4,

@@ -3,11 +3,13 @@ checkPriorBaselineCorr = function(experiment, print_stat = FALSE) {
     paste0("data/experiment-", experiment, "/clean/d-modelling.Rdata")
   ))
   
+  d_modelling <- d_modelling %>%
+    mutate(scale_confidence = as.numeric(scale(confidence)))
+
   # filter so that only baseline trials
   d_baseline <- d_modelling %>%
-    filter(n_sources == 1) %>%
-    mutate(scale_confidence = as.numeric(scale(confidence)))
-  
+    filter(n_sources == 1)
+
   corr <- cor.test(d_baseline$prior_belief, d_baseline$scale_confidence)
   r <- paste0("r = ", round(corr$estimate, 2))
   t <- paste0(" t = ", round(corr$statistic, 3))
@@ -39,11 +41,13 @@ checkPriorBaselineGroups = function(experiment,print_stat = FALSE) {
   ))
   
   
-  # filter so that only basline trials
-  d_baseline <- d_modelling %>%
-    filter(n_sources == 1) %>%
+  d_modelling <- d_modelling %>%
     mutate(scale_confidence = as.numeric(scale(confidence)))
-  
+
+  # filter so that only baseline trials
+  d_baseline <- d_modelling %>%
+    filter(n_sources == 1)
+
   # compare groups time points using paired t test
   ttest <- t.test(d_baseline$prior_belief,
                   d_baseline$scale_confidence,

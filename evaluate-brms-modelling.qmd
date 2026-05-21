@@ -100,14 +100,13 @@ To test these possibilities, we conducted a model comparison whereby we ran mode
 
 The results of the model comparison are in @tbl-m-comp-e1. It shows that the best performing model in Experiment 1 according to LOOIC was the *Rate + Increase* model, that assumes that both the increase and rate parameters vary across consensus conditions. This result suggests that 1) there are statistically credible differences in the relationship between consensus size and confidence between independent and dependent consensuses and 2) that independence results in a larger maximum increase in confidence and potentially also a *faster* increase in confidence relative to the dependent consensus. It is also a good sanity check that differences in conditions are not driven by differences in their baseline confidence (*start*) since there is no consensus independence manipulation in the baseline 1:1 trial.
 
-It is worth pointing out however, that the difference between the best performing *Increase + Start* model is very similar to the *Increase* only model. The Weight column in @tbl-m-comp-e1 shows pseudo-Bayesian model averaging weights, which can be interpreted as approximate posterior probabilities that each model provides the best predictions. The *Rate + Increase* and *Increase* models have similar probabilities (32% and 30% respectively), indicating substantial uncertainty about whether it is truly necessary for the rate parameter to differ between consensus conditions. Additionally, comparing the ΔELPD, which represents the difference in expected log point wise predictive density from the best model, reveals that the Increase model performs nearly identically to Rate + Increase (ΔELPD = -0.06 ± 0.17). The small magnitude of this difference relative to its standard error suggests the two models are effectively equivalent in predictive performance. Together, these results provide strong evidence that consensus independence increases the maximum confidence gain (increase parameter), with more uncertain evidence for an additional effect on the rate of confidence accumulation.
+It is worth pointing out however, that the difference between the best performing *Increase + Start* model is very similar to the *Increase* only model. The Weight column in @tbl-m-comp-e1 shows pseudo-Bayesian model averaging weights, which can be interpreted as approximate posterior probabilities that each model provides the best predictions. The *Rate + Increase* and *Increase* models have similar probabilities, indicating substantial uncertainty about whether it is truly necessary for the rate parameter to differ between consensus conditions. Additionally, comparing the ΔELPD, which represents the difference in expected log point wise predictive density from the best model, reveals that the Increase model performs nearly identically to Rate + Increase (ΔELPD = -0.02 ± 0.12). The small magnitude of this difference relative to its standard error suggests the two models are effectively equivalent in predictive performance. Together, these results provide strong evidence that consensus independence increases the maximum confidence gain (increase parameter), with more uncertain evidence for an additional effect on the rate of confidence accumulation.
 
 ```{r}
 #| label: tbl-m-comp-e1
 #| tbl-cap: "Model comparison statistics for Experiment 1. Models are ranked by Leave-One-Out Information Criterion (LOOIC), with lower values indicating better predictive performance. SE = standard error of LOOIC. ΔELPD = difference in expected log pointwise predictive density from the best-fitting model, with values closer to zero indicating similar performance. SE(ΔELPD) = standard error of the difference in ELPD. Weight = relative probability of each model relative to the other models, caluclated using pseudo Bayesian model avereging. Models varying only the rate and increase parameters by consensus showed the best predictive performance. "
 
 load(here("analyses/output/looic-model-comparison-e1-combined.Rdata"))
-load(here("analyses/output/weighted-looic-model-comparison-e1-combined.Rdata"))
 model_full_names <- c(
   "none" = "Null",
   "rate" = "Rate",
@@ -154,7 +153,7 @@ modelComparisonTable <- function(model_looic, model_full_names) {
 modelComparisonTable(model_looic, model_full_names)
 ```
 
-@tbl-params-e1 shows the parameter estimates of the best performing model (the Rate + Increase model), and the 95% credible intervals of those estimates. The estimates predicted that confidence grows from approximately 52.62 at baseline (Start), reaching a maximum (asymptote) confidence of 74.73 for the dependent consensus (52.62 + 22.11) and 82.64 for the independent consensus (52.62 + 30.02). As mentioned earlier, this highlights a benefit of our modelling approach, since the maximum estimated confidence values (the point at which confidence will no longer increase as a function of the consensus size, calculated as Start + Increase) was outside of the observed measured confidence (see Figure X). The differences in Increase across conditions appeared to be statistically reliable, with no overlap between the upper 95% credible interval of Increase\_{Dependent} and the Increase\_{Independent} estimate, and no overlap between the lower 95% credible interval for Increase\_{Independent} and the Increase\_{Dependent} estimate.The Rate parameter, which governs how quickly confidence approaches its asymptote, showed similar estimates across conditions, with the median estimates of the Dependent and Independent conditions overlapping with the others' credible intervals, suggesting the rate of confidence accumulation was less statistically reliable.
+@tbl-params-e1 shows the parameter estimates of the best performing model (the Rate + Increase model), and the 95% credible intervals of those estimates. The estimates predicted that confidence grows from approximately 52.64 at baseline (Start), reaching a maximum (asymptote) confidence of 74.76 for the dependent consensus (52.64 + 22.12) and 81.76 for the independent consensus (52.64 + 30.02). As mentioned earlier, this highlights a benefit of our modelling approach, since the maximum estimated confidence values (the point at which confidence will no longer increase as a function of the consensus size, calculated as Start + Increase) was outside of the observed measured confidence (see Figure X). The differences in Increase across conditions appeared to be statistically reliable, with no overlap between the upper 95% credible interval of Increase\_{Dependent} and the Increase\_{Independent} estimate, and no overlap between the lower 95% credible interval for Increase\_{Independent} and the Increase\_{Dependent} estimate.The Rate parameter, which governs how quickly confidence approaches its asymptote, showed similar estimates across conditions, with the median estimates of the Dependent and Independent conditions overlapping with the others' credible intervals, suggesting the rate of confidence accumulation was less statistically reliable.
 
 ```{r}
 #| label: tbl-params-e1
@@ -172,34 +171,38 @@ extractEstimates = function(fit, param_names) {
   summ_fit <- summary(fit)
   estimates <- summ_fit$fixed 
   
-  exp_estimates <- round(exp(estimates),2)
-
-  backup_estimates <- summ_fit$fixed # preserve unnexponentiated estimates for calculating the condition effect 
+  exp_estimates <- round(exp(estimates), 2)
   
   params <- rownames(estimates)
   effect_rows <- grepl("consensus", params)
   effect_params <- params[effect_rows]
-  #baseline_intercept <- paste0(target_param, "_Intercept")
+  
+  draws <- as_draws_df(fit)
+  
   for (i in 1:length(effect_params)) {
     param <- effect_params[i]
-    base_param <- sub("_.*", "",param)
-    baseline_intercept <- paste0(base_param,"_Intercept")
-    # adjust the estimate so it is on original scale and reflects independence effect
-    exp_estimates[param, "Estimate"] <- exp(estimates[param, "Estimate"] + estimates[baseline_intercept, "Estimate"])
-    exp_estimates[param, "l-95% CI"] <- exp(estimates[param, "Estimate"] + estimates[baseline_intercept, "l-95% CI"])
-    exp_estimates[param, "u-95% CI"] <- exp(estimates[param, "Estimate"] + estimates[baseline_intercept, "u-95% CI"])
+    base_param <- sub("_.*", "", param)
+    baseline_intercept <- paste0(base_param, "_Intercept")
+    
+    draw_col_slope     <- paste0("b_", param)
+    draw_col_intercept <- paste0("b_", baseline_intercept)
+    
+    combined_draws <- exp(draws[[draw_col_intercept]] + draws[[draw_col_slope]])
+    
+    exp_estimates[param, "Estimate"]   <- round(mean(combined_draws), 2)
+    exp_estimates[param, "l-95% CI"]  <- round(quantile(combined_draws, 0.025), 2)
+    exp_estimates[param, "u-95% CI"]  <- round(quantile(combined_draws, 0.975), 2)
   }
   
-  exp_estimates <- round(exp_estimates,2)
+  exp_estimates <- round(exp_estimates, 2)
   
   clean_estimates <- exp_estimates %>%
     mutate(Parameters = param_names) %>%
-    select(-Rhat, -Bulk_ESS, -Tail_ESS, -Est.Error)  %>%
+    select(-Rhat, -Bulk_ESS, -Tail_ESS, -Est.Error) %>%
     relocate(Parameters) %>%
-    remove_rownames() 
+    remove_rownames()
   
   autofit(flextable(clean_estimates))
-  
 }
 
 extractEstimates(fit, param_names)
@@ -237,7 +240,7 @@ plotFit(exp = 2,
 
 #### Model Comparison
 
-We conducted the same model comparison (with the same models) as Experiment 1 (see @tbl-m-comp-e2). This time, the *Increase* model performed best, suggesting that differences across all three conditions were likely to be driven by differences in the maximum growth in confidence as a function of increased consensus size. However, similar to Experiment 1, the ratio between ΔELPD and SE(ΔELPD) suggests the second best performing model (the *Rate* model) performed equivalently well. Curiously however, the *Rate + Increase* model was the *worst* performing model, which is surprising given that the individual models performed so well. This is likely because in Experiment 2, there was the Dependent Source condition, which may be driven by different mechanisms.
+We conducted the same model comparison (with the same models) as Experiment 1 (see @tbl-m-comp-e2). This time, the *Start + Increase* model performed best, suggesting that differences across all three conditions were likely to be driven by differences in the maximum growth in confidence as a function of increased consensus size, and differences in the starting point. However, similar to Experiment 1, the ratio between ΔELPD and SE(ΔELPD) suggests the second best performing model (the *Full* model) performed equivalently well. 
 
 ```{r}
 #| label: tbl-m-comp-e2
@@ -250,22 +253,22 @@ modelComparisonTable(model_looic, model_full_names)
 ```{r}
 #|include: FALSE
 #| label: tbl-params-e2
-#| tbl-cap: "Parameter estimates of the best performing model in Experument 2: the *Increase* model, in which the Increase parameter is the only parameter that can vary across consensus independence conditions. This change across conditions is operationalised by estimating Increase for the baseline condition (the *Dependent* condition), then estimating the *change* in that paremter in the independent condition. "
+#| tbl-cap: "Parameter estimates of the best performing model in Experument 2: the *Start + Increase* model, in which the Increase parameter and Start parameter can vary across consensus independence conditions. This change across conditions is operationalised by estimating Increase and Start for the baseline condition (the *Dependent* condition), then estimating the *change* in that paremter in the independent condition. "
 
-load(here("analyses/output/fe-brms-exp-2-power-fit-increase.Rdata"))
-param_names <- c("Start",
+load(here("analyses/output/fe-brms-exp-2-power-fit-start_increase.Rdata"))
+param_names <- c("Start_{Dependent}",
+                 "Start_{Dependent Source}",
+                 "Start_{Independent}",
                 "Increase_{Dependent}",
                  "Increase_{Dependent Source}",
                  "Increase_{Independent}",
                  "Rate")
-extractEstimates(fit, param_names) # PROBLEM: Exp is obscuring legit negative fixed effects. 
-# Also, should I be exponentiating the errors??? 
-# Soome follow up on Exp 3 might be important so that we know if increase is best for ALL conditions 
+extractEstimates(fit, param_names) 
 ```
 
 It is possible that there are divergent mechanisms driving the differences between Dependent Source vs. Dependent and Dependent vs. Independent. If this were the case, our original model comparison in @tbl-m-comp-e2 would not have been able to pick up on those differences. For example, it could be that *Increase* only explains the difference between independent vs. dependent, not dependent vs. dependent source.
 
-To test this possibility, we ran an identical model comparisons comparing independent vs. dependent conditions and Dependent vs. Dependent Source in Experiment 3 respectively. @tbl-m-comp-e3-rm-dep-source shows the model comparison for independent vs. dependent. This comparison reveals a similar result to Experiment 1, with the *Increase* model performing best (21% probability), though the *Rate + Increase* model performed nearly identically (20% probability, ΔELPD = -0.09 ± 0.05). In fact, the top three models (*Increase*, *Rate + Increase*, and *Rate*) all showed effectively equivalent predictive performance, with differences in ΔELPD values less than the standard error of those differences. The combined probability across these three models (58%) suggests that consensus independence affects confidence through either the increase parameter, the rate parameter, or both, though the data cannot definitively distinguish between these possibilities. This pattern is consistent with Experiment 1, where there was support for both *Increase* and *Rate* driving differences in conditions, with stronger statistical support for *Increase* relative to *Rate.* These results suggest that the mechanism by which independent consensus increases confidence relative to dependent consensus may involve both a higher asymptotic confidence and potentially a faster rate of accumulation.
+To test this possibility, we ran an identical model comparisons comparing independent vs. dependent conditions and Dependent vs. Dependent Source in Experiment 3 respectively. @tbl-m-comp-e3-rm-dep-source shows the model comparison for independent vs. dependent. This comparison reveals a similar result to Experiment 1, with the *Rate + Increase* model performing best (26% probability), though the Increase* model performed nearly identically (26% probability, ΔELPD = -0.01 ± 0.14).  This pattern is consistent with Experiment 1, where there was support for both *Increase* and *Rate* driving differences in conditions, with stronger statistical support for *Increase* relative to *Rate.* These results suggest that the mechanism by which independent consensus increases confidence relative to dependent consensus may involve both a higher asymptotic confidence and potentially a faster rate of accumulation.
 
 ```{r}
 #| label: tbl-m-comp-e3-rm-dep-source
@@ -274,22 +277,22 @@ load(here("analyses/output/looic-model-comparison-e2-rm-dependent_source.Rdata")
 modelComparisonTable(model_looic_rm_dependent_source, model_full_names)
 ```
 
-@tbl-m-comp-e3-rm-ind shows the model comparison for Dependent vs. Dependent Source conditions. This comparison reveals a different pattern from both Experiment 1 and the Independent vs. Dependent comparison. The Start model performed best (23% probability), suggesting that the primary difference between these conditions is in baseline confidence rather than in how confidence grows with consensus size. This is likely due to sampling error, given the baseline ratings were exactly the same in all conditions (i.e., there was no consensus in baseline).
-
 ```{r}
 #| label: tbl-params-e2-rm-dep-source
-#| tbl-cap: "Parameter estimates of the best performing model in Experument 2 comparing Independent vs. Dependent Consensys: the *Increase* model, in which the Increase parameter is the only parameter that can vary across consensus independence conditions."
+#| tbl-cap: "Parameter estimates of the best performing model in Experument 2 comparing Independent vs. Dependent Consensus: the *Rate + Increase* model, in which the Increase and Rate parameters can vary across consensus independence conditions."
 
-load(here("analyses/output/fe-brms-exp-2-power-fit-increase-rm-dependent_source.Rdata"))
+load(here("analyses/output/fe-brms-exp-2-power-fit-rate_increase-rm-dependent_source.Rdata"))
 param_names <- c("Start",
                 "Increase_{Dependent}",
-
-                                 "Increase_{Independent}",
-                 "Rate")
+                "Increase_{Independent}",
+                 "Rate_{Dependent}",
+                "Rate_{Inependent}")
 extractEstimates(fit, param_names)
 ```
 
-However, all models showed similar predictive performance, with ΔELPD values ranging from -0.58 to -1.54, all well within their standard errors. The model weights are distributed relatively evenly across models, with no single model receiving substantial support. This lack of clear differentiation suggests that the effect of source dependency (whether the same person cites the same source repeatedly vs. different people citing the same source) may be weak or operate through multiple parameters simultaneously. The relatively poor performance of models focusing solely on Increase or Rate parameters (ranks 3 and 2 respectively) contrasts with the Independent vs. Dependent comparison, suggesting that source dependency affects confidence judgments through a different mechanism than consensus independence. Together, these results indicate that the cognitive processes underlying sensitivity to source dependency may differ from those underlying sensitivity to consensus independence.
+@tbl-m-comp-e3-rm-ind shows the model comparison for Dependent vs. Dependent Source conditions. This comparison reveals a different pattern from both Experiment 1 and the Independent vs. Dependent comparison. The Start model performed best (24% probability), suggesting that the primary difference between these conditions is in baseline confidence rather than in how confidence grows with consensus size. This is likely due to sampling error, given the baseline ratings were exactly the same in all conditions (i.e., there was no consensus in baseline).
+
+However, all models showed similar predictive performance, with ΔELPD values ranging from -0.18 to -1.97, all well within their standard errors (except for the null model). The model weights are distributed relatively evenly across models, with no single model receiving substantial support. This lack of clear differentiation suggests that the effect of source dependency (whether the same person cites the same source repeatedly vs. different people citing the same source) may be weak or operate through multiple parameters simultaneously. The relatively poor performance of models focusing solely on Increase or Rate parameters (ranks 3 and 2 respectively) contrasts with the Independent vs. Dependent comparison, suggesting that source dependency affects confidence judgments through a different mechanism than consensus independence. Together, these results indicate that the cognitive processes underlying sensitivity to source dependency may differ from those underlying sensitivity to consensus independence.
 
 ```{r}
 #| label: tbl-m-comp-e3-rm-ind
@@ -305,7 +308,6 @@ modelComparisonTable(model_looic_rm_independent, model_full_names)
 load(here("analyses/output/fe-brms-exp-2-power-fit-start-rm-independent.Rdata"))
 param_names <- c(
                 "Start_{Dependent}",
-
                 "Start_{Dependent Source}",
                 "Increase",
                  "Rate")
@@ -341,7 +343,7 @@ A relevant question for relevant for our modelling approach is how to deal with 
 
 ## Does confidence change from prior to baseline?
 
-If we can treat prior and baseline as essentially the same, this will vastly simplify our modelling, as we can treat the baseline condition as people's priors. First, let's check the correlation
+It's worth seeing whether confidence at prior is the same as at baseline. This is tricky because they were measured on different scales, but we can see if they're correlated at least. 
 
 ```{r}
 experiments = c("1-combined", "2")
@@ -360,26 +362,7 @@ combined_corr_plot <- ggarrange(plotlist = all_corr_plots)
 combined_corr_plot
 ```
 
-These plots show very high correlations between someone's prior belief and their confidence at baseline in E2. It is not the case in E1 combined, but that may be a bug because of how I combined the data sets. I will look into that later. Now lets compare the means of the groups and their distributions.
-
-```{r}
-all_group_plots <- vector("list", length = length(experiments))
-
-for (i in 1:length(experiments)){
-  exp <- experiments[i]
-  all_group_plots[[i]] <- checkPriorBaselineGroups(exp)
-}
-
-
-combined_group_plot <- ggarrange(plotlist = all_group_plots)
-combined_group_plot
-```
-
-These plots show that scores are pretty much the same from prior to baseline. Although some participants do seem to change their rating, this appears to be the vast minority, and at the group level the distributions look similar. The means are also not significantly different from each other.
-
-Something else that's interesting is that the baseline condition seems to bring the distribution more towards the middle, somewhat nullifying the effect of priors (i.e., the baseline distribution is more symmetrical around 0).
-
-Taken together, I would argue that it's safe to ignore prior beliefs in the modelling and instead focus only on how beliefs change from baseline.
+These plots show very high correlations between someone's prior belief and their confidence at baseline in E2, sugesting they correspond pretty well with each other. 
 
 ## Models
 

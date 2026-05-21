@@ -66,8 +66,7 @@ plotFit(exp = "1-combined",
 #| label: tbl-m-comp-e1
 #| tbl-cap: "Model comparison statistics for Experiment 1. Models are ranked by Leave-One-Out Information Criterion (LOOIC), with lower values indicating better predictive performance. SE = standard error of LOOIC. ΔELPD = difference in expected log pointwise predictive density from the best-fitting model, with values closer to zero indicating similar performance. SE(ΔELPD) = standard error of the difference in ELPD. Weight = relative probability of each model relative to the other models, caluclated using pseudo Bayesian model avereging. Models varying only the rate and increase parameters by consensus showed the best predictive performance. "
 
-load(here("analyses/output/looic-model-comparison-e1-combined.Rdata"))
-load(here("analyses/output/weighted-looic-model-comparison-e1-combined.Rdata"))
+load(here("analyses/output/looic-model-comparison-e1-combined-no-exclusions.Rdata"))
 model_full_names <- c(
   "none" = "Null",
   "rate" = "Rate",
@@ -118,48 +117,50 @@ modelComparisonTable(model_looic, model_full_names)
 #| label: tbl-params-e1
 #| tbl-cap: "Parameter estimates of the best performing model in Experument 1: the *Increase* model, in which the Increase parameter is the only parameter that can vary across consensus independence conditions. This change across conditions is operationalised by estimating Increase for the baseline condition (the *Dependent* condition), then estimating the *change* in that paremter in the independent condition. "
 
-load(here("analyses/output/fe-brms-exp-1-combined-power-fit-rate_increase.Rdata"))
+load(here("analyses/output/fe-brms-exp-1-combined-power-fit-increase-no-exclusions.Rdata"))
 param_names <- c("Start",
                  "Increase_{Dependent}",
                  "Increase_{Independent}",
-                 "Rate_{Dependent}",
-                 "Rate_{Independent}")
+                 "Rate")
 
 
 extractEstimates = function(fit, param_names) {
   summ_fit <- summary(fit)
   estimates <- summ_fit$fixed 
   
-  exp_estimates <- round(exp(estimates),2)
-
-  backup_estimates <- summ_fit$fixed # preserve unnexponentiated estimates for calculating the condition effect 
+  exp_estimates <- round(exp(estimates), 2)
   
   params <- rownames(estimates)
   effect_rows <- grepl("consensus", params)
   effect_params <- params[effect_rows]
-  #baseline_intercept <- paste0(target_param, "_Intercept")
+  
+  draws <- as_draws_df(fit)
+  
   for (i in 1:length(effect_params)) {
     param <- effect_params[i]
-    base_param <- sub("_.*", "",param)
-    baseline_intercept <- paste0(base_param,"_Intercept")
-    # adjust the estimate so it is on original scale and reflects independence effect
-    exp_estimates[param, "Estimate"] <- exp(estimates[param, "Estimate"] + estimates[baseline_intercept, "Estimate"])
-    exp_estimates[param, "l-95% CI"] <- exp(estimates[param, "Estimate"] + estimates[baseline_intercept, "l-95% CI"])
-    exp_estimates[param, "u-95% CI"] <- exp(estimates[param, "Estimate"] + estimates[baseline_intercept, "u-95% CI"])
+    base_param <- sub("_.*", "", param)
+    baseline_intercept <- paste0(base_param, "_Intercept")
+    
+    draw_col_slope     <- paste0("b_", param)
+    draw_col_intercept <- paste0("b_", baseline_intercept)
+    
+    combined_draws <- exp(draws[[draw_col_intercept]] + draws[[draw_col_slope]])
+    
+    exp_estimates[param, "Estimate"]   <- round(mean(combined_draws), 2)
+    exp_estimates[param, "l-95% CI"]  <- round(quantile(combined_draws, 0.025), 2)
+    exp_estimates[param, "u-95% CI"]  <- round(quantile(combined_draws, 0.975), 2)
   }
   
-  exp_estimates <- round(exp_estimates,2)
+  exp_estimates <- round(exp_estimates, 2)
   
   clean_estimates <- exp_estimates %>%
     mutate(Parameters = param_names) %>%
-    select(-Rhat, -Bulk_ESS, -Tail_ESS, -Est.Error)  %>%
+    select(-Rhat, -Bulk_ESS, -Tail_ESS, -Est.Error) %>%
     relocate(Parameters) %>%
-    remove_rownames() 
+    remove_rownames()
   
   autofit(flextable(clean_estimates))
-  
 }
-
 extractEstimates(fit, param_names)
 
 ```
@@ -197,7 +198,7 @@ plotFit(exp = "2",
 #| label: tbl-m-comp-e2
 #| tbl-cap: "Model comparison using LOOIC (lower LOOIC = better performance). "
 
-load(here("analyses/output/looic-model-comparison-e2.Rdata"))
+load(here("analyses/output/looic-model-comparison-e2-no-exclusions.Rdata"))
 modelComparisonTable(model_looic, model_full_names)
 ```
 
@@ -206,7 +207,7 @@ modelComparisonTable(model_looic, model_full_names)
 #| label: tbl-params-e2
 #| tbl-cap: "Parameter estimates of the best performing model in Experument 2: the *Increase* model, in which the Increase parameter is the only parameter that can vary across consensus independence conditions. This change across conditions is operationalised by estimating Increase for the baseline condition (the *Dependent* condition), then estimating the *change* in that paremter in the independent condition. "
 
-load(here("analyses/output/fe-brms-exp-2-power-fit-increase.Rdata"))
+load(here("analyses/output/fe-brms-exp-2-power-fit-increase-no-exclusions.Rdata"))
 param_names <- c("Start",
                 "Increase_{Dependent}",
                  "Increase_{Dependent Source}",
@@ -249,18 +250,18 @@ load(here("analyses/output/looic-model-comparison-e2-rm-independent-no-exclusion
 modelComparisonTable(model_looic_rm_independent, model_full_names)
 ```
 
+This model comparison is clearly where there are the biggest discrepancies with respect to the order of the model comparisons, at least at first glance-- looking at the raw values, ELPD, and weights, there's basically nothing distinguishing them from each other. My interpretation would be that there is unikely to be any difference between dependent source and dependent. 
+
 ```{r}
 #| label: tbl-params-e2-rm-ind
 #| tbl-cap: "Parameter estimates of the best performing model in Experiment 2 comparing Dependent vs. Dependent Source: the *Start* model, in which the Start parameter is the only parameter that can vary across consensus conditions."
 
-load(here("analyses/output/fe-brms-exp-2-power-fit-start-rm-independent-no-exclusions.Rdata"))
-param_names <- c(
-                "Start_{Dependent}",
-
-                "Start_{Dependent Source}",
-                "Increase",
+load(here("analyses/output/fe-brms-exp-2-power-fit-increase-rm-independent-no-exclusions.Rdata"))
+param_names <- c("Start",
+                "Increase_{Dependent}",
+                "Increase_{Dependent Source}",
                  "Rate")
 extractEstimates(fit, param_names)
 ```
 
-
+The parameters above support that conclusion. Increase in both conditions is very similar and highly overlapping. 
